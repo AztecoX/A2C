@@ -33,3 +33,11 @@ src
 
 MUJOCO_LOG.TXT
 
+/acer
+/acktr
+/ddpg
+/deepq
+/gail
+/ppo1
+/ppo2
+/trpo_mpi
