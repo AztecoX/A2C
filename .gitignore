@@ -41,3 +41,4 @@ MUJOCO_LOG.TXT
 /ppo1
 /ppo2
 /trpo_mpi
+baselines/a2c/_files
