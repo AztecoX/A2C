@@ -2,15 +2,12 @@ from collections import namedtuple
 
 import numpy as np
 import sys
-from baselines.a2c.a2c import ActorCriticAgent, ACMode
+from baselines.a2c.a2c import ActorCriticAgent
 from baselines.common.preprocess import ObsProcesser, ActionProcesser, FEATURE_KEYS
 from baselines.a2c.utils import calculate_n_step_reward, general_n_step_advantage, combine_first_dimensions, \
     dict_of_lists_to_list_of_dicst
 import tensorflow as tf
 from absl import flags
-
-PPORunParams = namedtuple("PPORunParams", ["lambda_par", "batch_size", "n_epochs"])
-
 
 class Runner(object):
     def __init__(
@@ -20,7 +17,6 @@ class Runner(object):
             n_steps=5,
             discount=0.99,
             do_training=True,
-            ppo_par: PPORunParams = None
     ):
         self.envs = envs
         self.agent = agent
@@ -29,16 +25,8 @@ class Runner(object):
         self.n_steps = n_steps
         self.discount = discount
         self.do_training = do_training
-        self.ppo_par = ppo_par
         self.batch_counter = 0
         self.episode_counter = 0
-        assert self.agent.mode in [ACMode.PPO, ACMode.A2C]
-        self.is_ppo = self.agent.mode == ACMode.PPO
-        if self.is_ppo:
-            assert ppo_par is not None
-            assert n_steps * envs.n_envs % ppo_par.batch_size == 0
-            assert n_steps * envs.n_envs >= ppo_par.batch_size
-            self.ppo_par = ppo_par
 
     def reset(self):
         obs = self.envs.reset()
@@ -55,17 +43,8 @@ class Runner(object):
         self._log_score_to_tb(score)
         self.episode_counter += 1
 
-    def _train_ppo_epoch(self, full_input):
-        total_obs = self.n_steps * self.envs.n_envs
-        shuffle_idx = np.random.permutation(total_obs)
-        batches = dict_of_lists_to_list_of_dicst({
-            k: np.split(v[shuffle_idx], total_obs // self.ppo_par.batch_size)
-            for k, v in full_input.items()
-        })
-        for b in batches:
-            self.agent.train(b)
-
     def run_batch(self):
+        # init
         mb_actions = []
         mb_obs = []
         mb_values = np.zeros((self.envs.n_envs, self.n_steps + 1), dtype=np.float32)
@@ -97,7 +76,7 @@ class Runner(object):
             mb_rewards,
             mb_values,
             self.discount,
-            lambda_par=self.ppo_par.lambda_par if self.is_ppo else 1.0
+            lambda_par=1.0
         )
 
         full_input = {
@@ -112,12 +91,8 @@ class Runner(object):
 
         if not self.do_training:
             pass
-        elif self.agent.mode == ACMode.A2C:
+        else:
             self.agent.train(full_input)
-        elif self.agent.mode == ACMode.PPO:
-            for epoch in range(self.ppo_par.n_epochs):
-                self._train_ppo_epoch(full_input)
-            self.agent.update_theta()
 
         self.latest_obs = latest_obs
         self.batch_counter += 1

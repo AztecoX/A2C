@@ -7,8 +7,8 @@ from datetime import datetime
 from functools import partial
 import tensorflow as tf
 from absl import flags
-from baselines.a2c.a2c import ActorCriticAgent, ACMode
-from baselines.a2c.runner import Runner, PPORunParams
+from baselines.a2c.a2c import ActorCriticAgent
+from baselines.a2c.runner import Runner
 from baselines.common.multienv import SubprocVecEnv, make_sc2env, SingleEnv
 
 FLAGS = flags.FLAGS
@@ -17,7 +17,7 @@ flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap featur
 flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
 flags.DEFINE_integer("n_envs", 1, "Number of environments to run in parallel")
 flags.DEFINE_integer("n_steps_per_batch", None,
-    "Number of steps per batch, if None use 8 for a2c and 128 for ppo")
+    "Number of steps per batch, if None use 8 for a2c")
 flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
 flags.DEFINE_integer("scalar_summary_freq", 5, "Record scalar summaries every n batch")
 flags.DEFINE_string("checkpoint_path", "_files/models", "Path for agent checkpoints")
@@ -37,10 +37,6 @@ flags.DEFINE_float("loss_value_weight", 1.0, "good value might depend on the env
 flags.DEFINE_float("entropy_weight_spatial", 1e-6,
     "entropy of spatial action distribution loss weight")
 flags.DEFINE_float("entropy_weight_action", 1e-6, "entropy of action-id distribution loss weight")
-flags.DEFINE_float("ppo_lambda", 0.95, "lambda parameter for ppo")
-flags.DEFINE_integer("ppo_batch_size", None, "batch size for ppo, if None use n_steps_per_batch")
-flags.DEFINE_integer("ppo_epochs", 3, "epochs per update")
-flags.DEFINE_enum("agent_mode", ACMode.A2C, [ACMode.A2C, ACMode.PPO], "if should use A2C or PPO")
 
 FLAGS(sys.argv)
 
@@ -96,7 +92,6 @@ def main():
     sess = tf.Session()
 
     agent = ActorCriticAgent(
-        mode=FLAGS.agent_mode,
         sess=sess,
         spatial_dim=FLAGS.resolution,
         unit_type_emb_dim=5,
@@ -116,18 +111,9 @@ def main():
         agent.init()
 
     if FLAGS.n_steps_per_batch is None:
-        n_steps_per_batch = 128 if FLAGS.agent_mode == ACMode.PPO else 8
+        n_steps_per_batch = 8
     else:
         n_steps_per_batch = FLAGS.n_steps_per_batch
-
-    if FLAGS.agent_mode == ACMode.PPO:
-        ppo_par = PPORunParams(
-            FLAGS.ppo_lambda,
-            batch_size=FLAGS.ppo_batch_size or n_steps_per_batch,
-            n_epochs=FLAGS.ppo_epochs
-        )
-    else:
-        ppo_par = None
 
     runner = Runner(
         envs=envs,
@@ -135,7 +121,6 @@ def main():
         discount=FLAGS.discount,
         n_steps=n_steps_per_batch,
         do_training=FLAGS.training,
-        ppo_par=ppo_par
     )
 
     runner.reset()

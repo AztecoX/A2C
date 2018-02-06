@@ -30,11 +30,6 @@ def _get_placeholders(spatial_dim):
     )
 
 
-class ACMode:
-    A2C = "a2c"
-    PPO = "ppo"
-
-
 SelectedLogProbs = collections.namedtuple("SelectedLogProbs", ["action_id", "spatial", "total"])
 
 
@@ -47,8 +42,6 @@ class ActorCriticAgent:
             all_summary_freq: int,
             scalar_summary_freq: int,
             spatial_dim: int,
-            mode: str,
-            clip_epsilon=0.2,
             unit_type_emb_dim=4,
             loss_value_weight=1.0,
             entropy_weight_spatial=1e-6,
@@ -64,14 +57,10 @@ class ActorCriticAgent:
         https://github.com/deepmind/pysc2
         Can use
         - A2C https://blog.openai.com/baselines-acktr-a2c/ (synchronous version of A3C)
-        or
-        - PPO https://arxiv.org/pdf/1707.06347.pdf
         :param summary_path: tensorflow summaries will be created here
         :param all_summary_freq: how often save all summaries
         :param scalar_summary_freq: int, how often save scalar summaries
         :param spatial_dim: dimension for both minimap and screen
-        :param mode: a2c or ppo
-        :param clip_epsilon: epsilon for clipping the ratio in PPO (no effect in A2C)
         :param loss_value_weight: value weight for a2c update
         :param entropy_weight_spatial: spatial entropy weight for a2c update
         :param entropy_weight_action_id: action selection entropy weight for a2c update
@@ -82,8 +71,6 @@ class ActorCriticAgent:
         """
 
         assert optimiser in ["adam", "rmsprop"]
-        assert mode in [ACMode.A2C, ACMode.PPO]
-        self.mode = mode
         self.sess = sess
         self.spatial_dim = spatial_dim
         self.loss_value_weight = loss_value_weight
@@ -92,12 +79,12 @@ class ActorCriticAgent:
         self.unit_type_emb_dim = unit_type_emb_dim
         self.summary_path = summary_path
         os.makedirs(summary_path, exist_ok=True)
-        self.summary_writer = tf.summary.FileWriter(summary_path)
+#        self.summary_writer = tf.summary.FileWriter(summary_path)
+
         self.all_summary_freq = all_summary_freq
         self.scalar_summary_freq = scalar_summary_freq
         self.train_step = 0
         self.max_gradient_norm = max_gradient_norm
-        self.clip_epsilon = clip_epsilon
         self.policy = policy
 
         opt_class = tf.train.AdamOptimizer if optimiser == "adam" else tf.train.RMSPropOptimizer
@@ -117,8 +104,6 @@ class ActorCriticAgent:
 
     def init(self):
         self.sess.run(self.init_op)
-        if self.mode == ACMode.PPO:
-            self.update_theta()
 
     def _get_select_action_probs(self, pi, selected_spatial_action_flat):
         action_id = select_from_each_row(
@@ -138,6 +123,7 @@ class ActorCriticAgent:
     def build_model(self):
         self.placeholders = _get_placeholders(self.spatial_dim)
 
+        # Here, the actual policy network is built.
         with tf.variable_scope("theta"):
             theta = self.policy(self, trainable=True).build()
 
@@ -159,45 +145,10 @@ class ActorCriticAgent:
             theta.action_id_probs * theta.action_id_log_probs, axis=1
         ))
 
-        if self.mode == ACMode.PPO:
-            # could also use stop_gradient and forget about the trainable
-            with tf.variable_scope("theta_old"):
-                theta_old = self.policy(self, trainable=False).build()
-
-            new_theta_var = tf.global_variables("theta/")
-            old_theta_var = tf.global_variables("theta_old/")
-
-            assert len(tf.trainable_variables("theta/")) == len(new_theta_var)
-            assert not tf.trainable_variables("theta_old/")
-            assert len(old_theta_var) == len(new_theta_var)
-
-            self.update_theta_op = [
-                tf.assign(t_old, t_new) for t_new, t_old in zip(new_theta_var, old_theta_var)
-            ]
-
-            selected_log_probs_old = self._get_select_action_probs(
-                theta_old, selected_spatial_action_flat
-            )
-            ratio = tf.exp(selected_log_probs.total - selected_log_probs_old.total)
-            clipped_ratio = tf.clip_by_value(
-                ratio, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon
-            )
-            l_clip = tf.minimum(
-                ratio * self.placeholders.advantage,
-                clipped_ratio * self.placeholders.advantage
-            )
-            self.sampled_action_id = weighted_random_sample(theta_old.action_id_probs)
-            self.sampled_spatial_action = weighted_random_sample(theta_old.spatial_action_probs)
-            self.value_estimate = theta_old.value_estimate
-            self._scalar_summary("action/ratio", tf.reduce_mean(clipped_ratio))
-            self._scalar_summary("action/ratio_is_clipped",
-                tf.reduce_mean(tf.to_float(tf.equal(ratio, clipped_ratio))))
-            policy_loss = -tf.reduce_mean(l_clip)
-        else:
-            self.sampled_action_id = weighted_random_sample(theta.action_id_probs)
-            self.sampled_spatial_action = weighted_random_sample(theta.spatial_action_probs)
-            self.value_estimate = theta.value_estimate
-            policy_loss = -tf.reduce_mean(selected_log_probs.total * self.placeholders.advantage)
+        self.sampled_action_id = weighted_random_sample(theta.action_id_probs)
+        self.sampled_spatial_action = weighted_random_sample(theta.spatial_action_probs)
+        self.value_estimate = theta.value_estimate
+        policy_loss = -tf.reduce_mean(selected_log_probs.total * self.placeholders.advantage)
 
         value_loss = tf.losses.mean_squared_error(
             self.placeholders.value_target, theta.value_estimate)
@@ -240,6 +191,8 @@ class ActorCriticAgent:
         self.saver = tf.train.Saver(max_to_keep=2)
         self.all_summary_op = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
         self.scalar_summary_op = tf.summary.merge(tf.get_collection(self._scalar_summary_key))
+
+        self.summary_writer = tf.summary.FileWriter(self.summary_path, self.sess.graph)
 
     def _input_to_feed_dict(self, input_dict):
         return {k + ":0": v for k, v in input_dict.items()}
@@ -302,7 +255,3 @@ class ActorCriticAgent:
         self.train_step = int(ckpt.model_checkpoint_path.split('-')[-1])
         print("loaded old model with train_step %d" % self.train_step)
         self.train_step += 1
-
-    def update_theta(self):
-        if self.mode == ACMode.PPO:
-            self.sess.run(self.update_theta_op)
