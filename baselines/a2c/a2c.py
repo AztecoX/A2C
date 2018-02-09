@@ -105,9 +105,7 @@ class ActorCriticAgent:
         self.optimiser = opt_class(**pars)
 
     def init(self):
-        print("hi init1", flush=True)
         self.sess.run(self.init_op)
-        print("hi init2", flush=True)
 
     def _get_select_action_probs(self, pi, selected_spatial_action_flat):
         action_id = select_from_each_row(
@@ -254,7 +252,6 @@ class ActorCriticAgent:
         self.saver.save(self.sess, path + '/model.ckpt', global_step=step)
 
     def load(self, path):
-        print("trynaload?", flush=True)
         ckpt = tf.train.get_checkpoint_state(path)
         self.saver.restore(self.sess, ckpt.model_checkpoint_path)
         self.train_step = int(ckpt.model_checkpoint_path.split('-')[-1])

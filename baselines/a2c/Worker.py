@@ -31,19 +31,14 @@ class Worker:
         session = tf.Session()
         # Get the Worker unit ready for work.
         Worker.prepare_env_args(flags)
-        print("built1", flush=True)
-        self.build_envs(Worker.prepare_env_args(flags))
-        print("built2", flush=True)
+        self.build_envs(Worker.prepare_env_args(flags), flags.n_envs_per_model)
         self.build_agent(session, flags, config)
-        print("built3", flush=True)
         self.build_runner(flags, config)
-        print("built4", flush=True)
         # Waiting here for permission to start working.
         if self.can_start_working():
             self.work(flags)
         else:
             remote.close()
-        print("worked")
 
     @staticmethod
     def prepare_env_args(flags):
@@ -56,13 +51,12 @@ class Worker:
             visualize=flags.visualize
         )
 
-    def build_envs(self, env_args):
-        self.envs = SubprocVecEnv((partial(make_sc2env, **env_args),))
+    def build_envs(self, env_args, envs_per_model):
+        self.envs = SubprocVecEnv((partial(make_sc2env, **env_args),) * envs_per_model)
         # return SingleEnv(make_sc2env(**env_args))
 
     def build_agent(self, session, flags, config):
         # Set up the agent structure.
-        print("agent1", flush=True)
         self.agent = ActorCriticAgent(
             session=session,
             id=self.id,
@@ -78,9 +72,7 @@ class Worker:
             optimiser_pars=dict(learning_rate=flags.optimiser_lr,
                                 epsilon=flags.optimiser_eps)
         )
-        print("agent2", flush=True)
         self.agent.build_model()  # Build the agent model
-        print("agent3", flush=True)
         # TODO this loads last checkpoint model...explore new hyperparameters to
         # TODO differentiate loaded models?
         # TODO also, maybe init is needed to call only once for all agents!
@@ -88,7 +80,6 @@ class Worker:
             self.agent.load(config.full_checkpoint_path)
         else:
             self.agent.init()
-        print("agent4", flush=True)
         return self.agent
 
     def build_runner(self, flags, config):

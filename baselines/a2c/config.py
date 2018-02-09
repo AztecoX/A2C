@@ -23,7 +23,7 @@ class Config:
         flags.DEFINE_string("model_name", "temp_testing", "Name for checkpoints and tensorboard summaries")
         flags.DEFINE_integer("K_batches", 1,
                              "Number of training batches to run in thousands, use -1 to run forever")
-        flags.DEFINE_string("map_name", "CollectMineralShards", "Name of a map to use.")
+        flags.DEFINE_string("map_name", "MoveToBeacon", "Name of a map to use.")
         flags.DEFINE_boolean("training", True,
                              "if should train the model, if false then save only episode score summaries"
                              )
