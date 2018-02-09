@@ -24,7 +24,6 @@ class Runner(object):
         self.action_processer = ActionProcesser(dim=flags.FLAGS.resolution)
         self.n_steps = n_steps
         self.discount = discount
-        self.do_training = do_training
         self.batch_counter = 0
         self.episode_counter = 0
 
@@ -89,11 +88,8 @@ class Runner(object):
         full_input.update(self.obs_processer.combine_batch(mb_obs))
         full_input = {k: combine_first_dimensions(v) for k, v in full_input.items()}
 
-        if not self.do_training:
-            pass
-        else:
-            self.agent.train(full_input)
-
         self.latest_obs = latest_obs
         self.batch_counter += 1
         sys.stdout.flush()
+
+        return full_input

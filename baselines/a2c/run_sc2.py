@@ -10,43 +10,13 @@ from absl import flags
 from baselines.a2c.a2c import ActorCriticAgent
 from baselines.a2c.runner import Runner
 from baselines.common.multienv import SubprocVecEnv, make_sc2env, SingleEnv
+from baselines.a2c.config import Config
+import time
+
+config = Config()           # Loading the configuration parameters
 
 FLAGS = flags.FLAGS
-flags.DEFINE_bool("visualize", False, "Whether to render with pygame.")
-flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap feature layers.")
-flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
-flags.DEFINE_integer("n_envs", 1, "Number of environments to run in parallel")
-flags.DEFINE_integer("n_steps_per_batch", None,
-    "Number of steps per batch, if None use 8 for a2c")
-flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
-flags.DEFINE_integer("scalar_summary_freq", 5, "Record scalar summaries every n batch")
-flags.DEFINE_string("checkpoint_path", "_files/models", "Path for agent checkpoints")
-flags.DEFINE_string("summary_path", "_files/summaries", "Path for tensorboard summaries")
-flags.DEFINE_string("model_name", "temp_testing", "Name for checkpoints and tensorboard summaries")
-flags.DEFINE_integer("K_batches", -1,
-    "Number of training batches to run in thousands, use -1 to run forever")
-flags.DEFINE_string("map_name", "MoveToBeacon", "Name of a map to use.")
-flags.DEFINE_float("discount", 0.95, "Reward-discount for the agent")
-flags.DEFINE_boolean("training", True,
-    "if should train the model, if false then save only episode score summaries"
-)
-flags.DEFINE_enum("if_output_exists", "overwrite", ["fail", "overwrite", "continue"],
-    "What to do if summary and model output exists, only for training, is ignored if notraining")
-flags.DEFINE_float("max_gradient_norm", 500.0, "good value might depend on the environment")
-flags.DEFINE_float("loss_value_weight", 1.0, "good value might depend on the environment")
-flags.DEFINE_float("entropy_weight_spatial", 1e-6,
-    "entropy of spatial action distribution loss weight")
-flags.DEFINE_float("entropy_weight_action", 1e-6, "entropy of action-id distribution loss weight")
-
-FLAGS(sys.argv)
-
-#TODO this runner is maybe too long and too messy..
-full_checkpoint_path = os.path.join(FLAGS.checkpoint_path, FLAGS.model_name)
-
-if FLAGS.training:
-    full_summary_path = os.path.join(FLAGS.summary_path, FLAGS.model_name)
-else:
-    full_summary_path = os.path.join(FLAGS.summary_path, "no_training", FLAGS.model_name)
+FLAGS(sys.argv)             # Parameters now accessible through FLAGS.
 
 
 def check_and_handle_existing_folder(f):
@@ -66,16 +36,45 @@ def _print(i):
 
 def _save_if_training(agent):
     if FLAGS.training:
-        agent.save(full_checkpoint_path)
+        agent.save(config.full_checkpoint_path)
         agent.flush_summaries()
         sys.stdout.flush()
+
+def main_loop(model_id, agent, runner, n_batches):
+    i = 0
+
+    # Main loop for running and training
+    try:
+        while True:
+            if i % 500 == 0:
+                _print(i)
+            if i % 4000 == 0:
+                _save_if_training(agent)
+
+            training_input = runner.run_batch()     # run
+
+            if FLAGS.training:
+                agent.train(training_input)         # train
+            else:
+                pass
+
+            i += 1
+            if 0 <= n_batches <= i:
+                break
+    except KeyboardInterrupt:
+        pass
+
+    print("Okay. Work is done")
+
+    _print(i)
 
 
 def main():
     if FLAGS.training:
-        check_and_handle_existing_folder(full_checkpoint_path)
-        check_and_handle_existing_folder(full_summary_path)
+        check_and_handle_existing_folder(config.full_checkpoint_path)
+        check_and_handle_existing_folder(config.full_summary_path)
 
+    # Set up the environments (each separate environment is a subprocess)
     env_args = dict(
         map_name=FLAGS.map_name,
         step_mul=FLAGS.step_mul,
@@ -85,60 +84,83 @@ def main():
         visualize=FLAGS.visualize
     )
 
-    envs = SubprocVecEnv((partial(make_sc2env, **env_args),) * FLAGS.n_envs)
-    # envs = SingleEnv(make_sc2env(**env_args))
-
     tf.reset_default_graph()
-    sess = tf.Session()
+    session = tf.Session()
 
-    agent = ActorCriticAgent(
-        sess=sess,
-        spatial_dim=FLAGS.resolution,
-        unit_type_emb_dim=5,
-        loss_value_weight=FLAGS.loss_value_weight,
-        entropy_weight_action_id=FLAGS.entropy_weight_action,
-        entropy_weight_spatial=FLAGS.entropy_weight_spatial,
-        scalar_summary_freq=FLAGS.scalar_summary_freq,
-        all_summary_freq=FLAGS.all_summary_freq,
-        summary_path=full_summary_path,
-        max_gradient_norm=FLAGS.max_gradient_norm
-    )
+    agents = []
+    runners = []
+    envs = []
+    for n in range(FLAGS.n_models):
+        # Set up the agent structure.
 
-    agent.build_model()
-    if os.path.exists(full_checkpoint_path):
-        agent.load(full_checkpoint_path)
-    else:
-        agent.init()
+        env_group = SubprocVecEnv((partial(make_sc2env, **env_args),) * FLAGS.n_envs_per_model)
+        # env_group = SingleEnv(make_sc2env(**env_args))
 
-    if FLAGS.n_steps_per_batch is None:
-        n_steps_per_batch = 8
-    else:
-        n_steps_per_batch = FLAGS.n_steps_per_batch
+        envs.append(env_group)
 
-    runner = Runner(
-        envs=envs,
-        agent=agent,
-        discount=FLAGS.discount,
-        n_steps=n_steps_per_batch,
-        do_training=FLAGS.training,
-    )
+        agent = ActorCriticAgent(
+            session=session,
+            id=n,
+            unit_type_emb_dim=5,
+            spatial_dim=FLAGS.resolution,
+            loss_value_weight=FLAGS.loss_value_weight,
+            entropy_weight_action_id=FLAGS.entropy_weight_action,
+            entropy_weight_spatial=FLAGS.entropy_weight_spatial,
+            scalar_summary_freq=FLAGS.scalar_summary_freq,
+            all_summary_freq=FLAGS.all_summary_freq,
+            summary_path=(config.full_summary_path + str(1)),
+            max_gradient_norm=FLAGS.max_gradient_norm,
+            optimiser_pars=dict(learning_rate=FLAGS.optimiser_lr,
+                                epsilon=FLAGS.optimiser_eps)
+        )
+        agent.build_model() # Build the agent model
 
-    runner.reset()
+        # TODO this loads last checkpoint...explore different models?
+        # TODO also, maybe init is needed to call only once for all agents!
+        if os.path.exists(config.full_checkpoint_path):
+            agent.load(config.full_checkpoint_path)
+        else:
+            agent.init()
+
+        runner = Runner(
+            envs=env_group,
+            agent=agent,
+            discount=FLAGS.discount,
+            n_steps=FLAGS.n_steps_per_batch,
+        )
+
+        runner.reset()
+
+        agents.append(agent)
+        runners.append(runner)
+
+        print("Created " + str(n) + " out of " + str(FLAGS.n_models) + " agents.")
 
     if FLAGS.K_batches >= 0:
         n_batches = FLAGS.K_batches * 1000
     else:
         n_batches = -1
 
+    print("Created " + str(len(agents) + 1) + " agents and " + (str(len(envs)) * FLAGS.n_envs_per_model) + "envs.")
+#    _save_if_training(agent)
+
     i = 0
 
+    # Main loop for running and training
     try:
         while True:
             if i % 500 == 0:
                 _print(i)
             if i % 4000 == 0:
                 _save_if_training(agent)
-            runner.run_batch()
+
+            training_input = runners[0].run_batch()     # run
+
+            if FLAGS.training:
+                agents[0].train(training_input)         # train
+            else:
+                pass
+
             i += 1
             if 0 <= n_batches <= i:
                 break
@@ -146,10 +168,15 @@ def main():
         pass
 
     print("Okay. Work is done")
-    _print(i)
-    _save_if_training(agent)
 
-    envs.close()
+    _print(i)
+
+
+
+    #TODO DO NOT CLOSE ENVS BEFORE IT ENDS
+
+    for env_group in envs:
+        env_group.close()
 
 
 if __name__ == "__main__":

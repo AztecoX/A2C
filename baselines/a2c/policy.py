@@ -1,4 +1,5 @@
 import tensorflow as tf
+import numpy as np
 from pysc2.lib import actions
 from pysc2.lib.features import SCREEN_FEATURES, MINIMAP_FEATURES
 from tensorflow.contrib import layers
@@ -22,7 +23,7 @@ class FullyConvPolicy:
     def _build_convs(self, inputs, name):
         conv1 = layers.conv2d(
             inputs=inputs,
-            data_format="NHWC",
+            data_format="NCHW",
             num_outputs=16,
             kernel_size=5,
             stride=1,
@@ -33,7 +34,7 @@ class FullyConvPolicy:
         )
         conv2 = layers.conv2d(
             inputs=conv1,
-            data_format="NHWC",
+            data_format="NCHW",
             num_outputs=32,
             kernel_size=3,
             stride=1,
@@ -50,25 +51,26 @@ class FullyConvPolicy:
         return conv2
 
     def build(self):
-        units_embedded = layers.embed_sequence(
+        units_embedded = tf.transpose(layers.embed_sequence(
             self.placeholders.screen_unit_type,
             vocab_size=SCREEN_FEATURES.unit_type.scale,
             embed_dim=self.unittype_emb_dim,
             scope="unit_type_emb",
             trainable=self.trainable
-        )
+        ), (0, 3, 1, 2))
 
         # Let's not one-hot zero which is background
-        player_relative_screen_one_hot = layers.one_hot_encoding(
+        player_relative_screen_one_hot = tf.transpose((layers.one_hot_encoding(
             self.placeholders.player_relative_screen,
             num_classes=SCREEN_FEATURES.player_relative.scale
-        )[:, :, :, 1:]
-        player_relative_minimap_one_hot = layers.one_hot_encoding(
+        )[:, :, :, 1:]), (0, 3, 1, 2))
+        player_relative_minimap_one_hot = tf.transpose((layers.one_hot_encoding(
             self.placeholders.player_relative_minimap,
             num_classes=MINIMAP_FEATURES.player_relative.scale
-        )[:, :, :, 1:]
+        )[:, :, :, 1:]), (0, 3, 1, 2))
 
-        channel_axis = 3
+        channel_axis = 1
+
         screen_numeric_all = tf.concat(
             [self.placeholders.screen_numeric, units_embedded, player_relative_screen_one_hot],
             axis=channel_axis
@@ -77,6 +79,7 @@ class FullyConvPolicy:
             [self.placeholders.minimap_numeric, player_relative_minimap_one_hot],
             axis=channel_axis
         )
+
         screen_output = self._build_convs(screen_numeric_all, "screen_network")
         minimap_output = self._build_convs(minimap_numeric_all, "minimap_network")
 
@@ -84,7 +87,7 @@ class FullyConvPolicy:
 
         spatial_action_logits = layers.conv2d(
             map_output,
-            data_format="NHWC",
+            data_format="NCHW",
             num_outputs=1,
             kernel_size=1,
             stride=1,

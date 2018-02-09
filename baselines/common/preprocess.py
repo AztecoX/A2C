@@ -105,8 +105,8 @@ class ObsProcesser:
         pp_obs = [self.process_one_input(obs) for obs in obs_list]
         pp_obs = stack_list_of_dicts(pp_obs)
 
-        for k in ["screen_numeric", "minimap_numeric"]:
-            pp_obs[k] = np.transpose(pp_obs[k], [0, 2, 3, 1])
+#        for k in ["screen_numeric", "minimap_numeric"]:
+#            pp_obs[k] = np.transpose(pp_obs[k], [0, 2, 3, 1])
 
         return pp_obs
 

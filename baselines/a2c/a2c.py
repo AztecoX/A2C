@@ -13,8 +13,8 @@ from baselines.a2c.utils import weighted_random_sample, select_from_each_row, ra
 def _get_placeholders(spatial_dim):
     sd = spatial_dim
     feature_list = [
-        (FEATURE_KEYS.minimap_numeric, tf.float32, [None, sd, sd, ObsProcesser.N_MINIMAP_CHANNELS]),
-        (FEATURE_KEYS.screen_numeric, tf.float32, [None, sd, sd, ObsProcesser.N_SCREEN_CHANNELS]),
+        (FEATURE_KEYS.minimap_numeric, tf.float32, [None, ObsProcesser.N_MINIMAP_CHANNELS, sd, sd]),
+        (FEATURE_KEYS.screen_numeric, tf.float32, [None, ObsProcesser.N_SCREEN_CHANNELS, sd, sd]),
         (FEATURE_KEYS.screen_unit_type, tf.int32, [None, sd, sd]),
         (FEATURE_KEYS.is_spatial_action_available, tf.float32, [None]),
         (FEATURE_KEYS.available_action_ids, tf.float32, [None, len(actions.FUNCTIONS)]),
@@ -37,20 +37,21 @@ class ActorCriticAgent:
     _scalar_summary_key = "scalar_summaries"
 
     def __init__(self,
-            sess: tf.Session,
-            summary_path: str,
-            all_summary_freq: int,
-            scalar_summary_freq: int,
-            spatial_dim: int,
-            unit_type_emb_dim=4,
-            loss_value_weight=1.0,
-            entropy_weight_spatial=1e-6,
-            entropy_weight_action_id=1e-5,
-            max_gradient_norm=None,
-            optimiser="adam",
-            optimiser_pars: dict = None,
-            policy=FullyConvPolicy
-    ):
+                 session: tf.Session,
+                 id: int,
+                 summary_path: str,
+                 all_summary_freq: int,
+                 scalar_summary_freq: int,
+                 spatial_dim: int,
+                 unit_type_emb_dim=4,
+                 loss_value_weight=1.0,
+                 entropy_weight_spatial=1e-6,
+                 entropy_weight_action_id=1e-5,
+                 max_gradient_norm=None,
+                 optimiser="adam",
+                 optimiser_pars: dict = None,
+                 policy=FullyConvPolicy
+                 ):
         """
         Actor-Critic Agent for learning pysc2-minigames
         https://arxiv.org/pdf/1708.04782.pdf
@@ -71,12 +72,13 @@ class ActorCriticAgent:
         """
 
         assert optimiser in ["adam", "rmsprop"]
-        self.sess = sess
+        self.sess = session
+        self.id = id
         self.spatial_dim = spatial_dim
+        self.unit_type_emb_dim=unit_type_emb_dim
         self.loss_value_weight = loss_value_weight
         self.entropy_weight_spatial = entropy_weight_spatial
         self.entropy_weight_action_id = entropy_weight_action_id
-        self.unit_type_emb_dim = unit_type_emb_dim
         self.summary_path = summary_path
         os.makedirs(summary_path, exist_ok=True)
 #        self.summary_writer = tf.summary.FileWriter(summary_path)
@@ -124,7 +126,7 @@ class ActorCriticAgent:
         self.placeholders = _get_placeholders(self.spatial_dim)
 
         # Here, the actual policy network is built.
-        with tf.variable_scope("theta"):
+        with tf.variable_scope("theta" + str(self.id)):
             theta = self.policy(self, trainable=True).build()
 
         selected_spatial_action_flat = ravel_index_pairs(
