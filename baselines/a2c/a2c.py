@@ -13,8 +13,8 @@ from baselines.a2c.utils import weighted_random_sample, select_from_each_row, ra
 def _get_placeholders(spatial_dim):
     sd = spatial_dim
     feature_list = [
-        (FEATURE_KEYS.minimap_numeric, tf.float32, [None, ObsProcesser.N_MINIMAP_CHANNELS, sd, sd]),
-        (FEATURE_KEYS.screen_numeric, tf.float32, [None, ObsProcesser.N_SCREEN_CHANNELS, sd, sd]),
+        (FEATURE_KEYS.minimap_numeric, tf.float32, [None, sd, sd, ObsProcesser.N_MINIMAP_CHANNELS]),
+        (FEATURE_KEYS.screen_numeric, tf.float32, [None, sd, sd, ObsProcesser.N_SCREEN_CHANNELS]),
         (FEATURE_KEYS.screen_unit_type, tf.int32, [None, sd, sd]),
         (FEATURE_KEYS.is_spatial_action_available, tf.float32, [None]),
         (FEATURE_KEYS.available_action_ids, tf.float32, [None, len(actions.FUNCTIONS)]),
@@ -105,7 +105,9 @@ class ActorCriticAgent:
         self.optimiser = opt_class(**pars)
 
     def init(self):
+        print("hi init1", flush=True)
         self.sess.run(self.init_op)
+        print("hi init2", flush=True)
 
     def _get_select_action_probs(self, pi, selected_spatial_action_flat):
         action_id = select_from_each_row(
@@ -252,6 +254,7 @@ class ActorCriticAgent:
         self.saver.save(self.sess, path + '/model.ckpt', global_step=step)
 
     def load(self, path):
+        print("trynaload?", flush=True)
         ckpt = tf.train.get_checkpoint_state(path)
         self.saver.restore(self.sess, ckpt.model_checkpoint_path)
         self.train_step = int(ckpt.model_checkpoint_path.split('-')[-1])

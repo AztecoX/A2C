@@ -16,7 +16,7 @@ class Runner(object):
             agent: ActorCriticAgent,
             n_steps=5,
             discount=0.99,
-            do_training=True,
+            checkpoint_path=""
     ):
         self.envs = envs
         self.agent = agent
@@ -26,6 +26,7 @@ class Runner(object):
         self.discount = discount
         self.batch_counter = 0
         self.episode_counter = 0
+        self.checkpoint_path=checkpoint_path
 
     def reset(self):
         obs = self.envs.reset()

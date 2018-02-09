@@ -9,11 +9,11 @@ class Config:
         self.set_paths()
 
     def set_flags(self):
-        flags.DEFINE_bool("visualize", True, "Whether to render with pygame.")
+        flags.DEFINE_bool("visualize", False, "Whether to render with pygame.")
         flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap feature layers.")
         flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
         flags.DEFINE_integer("n_models", 1, "Number of models being trained in parallel by PBT.")
-        flags.DEFINE_integer("n_envs_per_model", 1, "Number of environments to run in parallel")
+        flags.DEFINE_integer("n_envs_per_model", 4, "Number of environments to run in parallel")
         flags.DEFINE_integer("n_steps_per_batch", 8,
                              "Number of steps per batch, EXPERIMENT WITH THIS?")
         flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
@@ -21,7 +21,7 @@ class Config:
         flags.DEFINE_string("checkpoint_path", "_files/models", "Path for agent checkpoints")
         flags.DEFINE_string("summary_path", "_files/summaries", "Path for tensorboard summaries")
         flags.DEFINE_string("model_name", "temp_testing", "Name for checkpoints and tensorboard summaries")
-        flags.DEFINE_integer("K_batches", 100,
+        flags.DEFINE_integer("K_batches", 1,
                              "Number of training batches to run in thousands, use -1 to run forever")
         flags.DEFINE_string("map_name", "CollectMineralShards", "Name of a map to use.")
         flags.DEFINE_boolean("training", True,
