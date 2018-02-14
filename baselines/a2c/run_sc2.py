@@ -2,11 +2,13 @@ import os
 import shutil
 import sys
 from datetime import datetime
-import tensorflow as tf
 from absl import flags
 from baselines.a2c.PBTManager import PBTManager
 
 from baselines.a2c.config import Config
+
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 config = Config()           # Loading the configuration parameters
 

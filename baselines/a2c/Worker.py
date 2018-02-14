@@ -28,7 +28,7 @@ class Worker:
         self.envs = []
         self.agent = self.runner = None
         tf.reset_default_graph()
-        session = tf.Session()
+        session = tf.Session(config=config.tf_config)
         # Get the Worker unit ready for work.
         Worker.prepare_env_args(flags)
         self.build_envs(Worker.prepare_env_args(flags), flags.n_envs_per_model)
