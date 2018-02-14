@@ -18,22 +18,28 @@ class Worker:
     @staticmethod
     def _save_if_training(agent, checkpoint_path, training):
         if training:
-            agent.save(checkpoint_path)
+            agent.save_default(checkpoint_path)
             agent.flush_summaries()
             sys.stdout.flush()
 
-    def __init__(self, remote, remote_id, flags, config):
+    def __init__(self, remote, remote_id, flags, config, lock):
         self.remote = remote
         self.id = remote_id
+        self.lock = lock
+        self.batches_per_pbt_eval = flags.K_batches_per_eval * 1000
         self.envs = []
         self.agent = self.runner = None
         tf.reset_default_graph()
-        session = tf.Session(config=config.tf_config)
+        self.session = tf.Session(config=config.tf_config)
         # Get the Worker unit ready for work.
         Worker.prepare_env_args(flags)
         self.build_envs(Worker.prepare_env_args(flags), flags.n_envs_per_model)
-        self.build_agent(session, flags, config)
+        self.build_agent(flags, config)
         self.build_runner(flags, config)
+
+        # An object for saving and restoring models from storage.
+        self.saver = tf.train.Saver()
+
         # Waiting here for permission to start working.
         if self.can_start_working():
             self.work(flags)
@@ -55,10 +61,10 @@ class Worker:
         self.envs = SubprocVecEnv((partial(make_sc2env, **env_args),) * envs_per_model)
         # return SingleEnv(make_sc2env(**env_args))
 
-    def build_agent(self, session, flags, config):
+    def build_agent(self, flags, config):
         # Set up the agent structure.
         self.agent = ActorCriticAgent(
-            session=session,
+            session=self.session,
             id=self.id,
             unit_type_emb_dim=5,
             spatial_dim=flags.resolution,
@@ -77,7 +83,7 @@ class Worker:
         # TODO differentiate loaded models?
         # TODO also, maybe init is needed to call only once for all agents!
         if os.path.exists(config.full_checkpoint_path):
-            self.agent.load(config.full_checkpoint_path)
+            self.agent.load_default(config.full_checkpoint_path)
         else:
             self.agent.init()
         return self.agent
@@ -107,6 +113,7 @@ class Worker:
         cmd = ""
         action = ""
         i = 0
+        done = False
 
         if flags.K_batches >= 0:
             n_batches = flags.K_batches * 1000
@@ -122,10 +129,10 @@ class Worker:
                 else:
                     if i % 1000 == 0:
                         Worker._print(i)
-                    if i % 4000 == 0:
-                        Worker._save_if_training(self.agent,
-                                                 self.runner.checkpoint_path,
-                                                 flags.training)
+#                    if i % 10000 == 0:
+#                        Worker._save_if_training(self.agent,
+#                                                 self.runner.checkpoint_path,
+#                                                 flags.training)
 
                     training_input = self.runner.run_batch()  # run
 
@@ -135,10 +142,32 @@ class Worker:
                         pass
 
                     i += 1
-                    if 0 <= n_batches <= i:
+
+                    if i % self.batches_per_pbt_eval == 0:
+                        done = self.evaluate_and_update_model()
+
+                    if 0 <= n_batches <= i or done:
                         break
 
         except KeyboardInterrupt:
             pass
 
+        self.remote.send(('done'))
         self.remote.close()
+
+    def evaluate_and_update_model(self):
+        # Evaluating...
+        self.remote.send(('evaluate',
+                          self.id,
+                          self.runner.get_and_reset_score()))
+        cmd, arg = self.remote.recv()
+
+        # Updating...
+
+        if cmd == 'restore':
+            self.agent.load(self.runner.checkpoint_path, arg, self.lock, self.saver)
+        elif cmd == 'save':
+            self.agent.save(self.runner.checkpoint_path, self.lock, self.saver)
+        else:
+            return True
+        return False

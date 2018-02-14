@@ -27,6 +27,7 @@ class Runner(object):
         self.batch_counter = 0
         self.episode_counter = 0
         self.checkpoint_path=checkpoint_path
+        self.accumulated_score = 0
 
     def reset(self):
         obs = self.envs.reset()
@@ -41,7 +42,13 @@ class Runner(object):
         score = timestep.observation["score_cumulative"][0]
         print("episode %d ended. Score %f" % (self.episode_counter, score))
         self._log_score_to_tb(score)
+        self.accumulated_score += score
         self.episode_counter += 1
+
+    def get_and_reset_score(self):
+        score = self.accumulated_score
+        self.accumulated_score = 0
+        return score
 
     def run_batch(self):
         # init

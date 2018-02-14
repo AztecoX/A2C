@@ -23,8 +23,10 @@ class Config:
         flags.DEFINE_string("checkpoint_path", "_files/models", "Path for agent checkpoints")
         flags.DEFINE_string("summary_path", "_files/summaries", "Path for tensorboard summaries")
         flags.DEFINE_string("model_name", "temp_testing", "Name for checkpoints and tensorboard summaries")
-        flags.DEFINE_integer("K_batches", 1,
+        flags.DEFINE_integer("K_batches", 10,
                              "Number of training batches to run in thousands, use -1 to run forever")
+        flags.DEFINE_integer("K_batches_per_eval", 1,
+                             "Number of training batches to run in thousands before PBT evaluates model")
         flags.DEFINE_string("map_name", "MoveToBeacon", "Name of a map to use.")
         flags.DEFINE_boolean("training", True,
                              "if should train the model, if false then save only episode score summaries"
@@ -36,11 +38,12 @@ class Config:
 
         flags.DEFINE_float("discount", 0.95, "Reward-discount for the agent")
         flags.DEFINE_float("loss_value_weight", 1.0, "good value might depend on the environment")
-        flags.DEFINE_float("optimiser_lr", 1e-4, "Reward-discount for the agent")
-        flags.DEFINE_float("optimiser_eps", 5e-7, "Reward-discount for the agent")
+        flags.DEFINE_float("optimiser_lr", 1e-4, "Optimiser learning rate")
+        flags.DEFINE_float("optimiser_eps", 1e-7, "Optimiser parameter preventing by-zero division.")
         flags.DEFINE_float("entropy_weight_spatial", 1e-4,
                           "entropy of spatial action distribution loss weight")
         flags.DEFINE_float("entropy_weight_action", 1e-4, "entropy of action-id distribution loss weight")
+
 
     def set_paths(self):
         FLAGS = flags.FLAGS

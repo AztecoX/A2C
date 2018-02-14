@@ -31,13 +31,6 @@ def _print(i):
     sys.stdout.flush()
 
 
-def _save_if_training(agent):
-    if FLAGS.training:
-        agent.save(config.full_checkpoint_path)
-        agent.flush_summaries()
-        sys.stdout.flush()
-
-
 def main():
     if FLAGS.training:
         check_and_handle_existing_folder(config.full_checkpoint_path)
@@ -53,8 +46,9 @@ def main():
     pbt.set_up_processes()
     pbt.start_running()
 
-    pbt.wait_for_finish()
-#    pbt.stop_running()
+#    pbt.wait_for_finish()
+    pbt.handle_requests()
+    pbt.stop_running()
 
     print("Okay. Work is done")
 

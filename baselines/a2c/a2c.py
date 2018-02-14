@@ -126,7 +126,7 @@ class ActorCriticAgent:
         self.placeholders = _get_placeholders(self.spatial_dim)
 
         # Here, the actual policy network is built.
-        with tf.variable_scope("theta" + str(self.id)):
+        with tf.variable_scope("theta"):
             theta = self.policy(self, trainable=True).build()
 
         selected_spatial_action_flat = ravel_index_pairs(
@@ -245,13 +245,29 @@ class ActorCriticAgent:
     def flush_summaries(self):
         self.summary_writer.flush()
 
-    def save(self, path, step=None):
+    def save_default(self, path, step=None):
         os.makedirs(path, exist_ok=True)
         step = step or self.train_step
         print("saving model to %s, step %d" % (path, step))
         self.saver.save(self.sess, path + '/model.ckpt', global_step=step)
 
-    def load(self, path):
+    def save(self, path, lock, saver):
+        os.makedirs(path, exist_ok=True)
+        print("saving model to %s" % (path + '/model' + str(self.id) + '.meta'))
+        lock.acquire()
+        tf.train.export_meta_graph(filename=path + '/model' + str(self.id) + '.meta')
+#        saver.save(self.sess, path + '/model' + str(self.id) + '.ckpt')
+        lock.release()
+
+    def load(self, path, model_id, lock, saver):
+        print("loaded a more successful model" + str(model_id) + " instead of model" + str(self.id))
+        lock.acquire()
+        tf.reset_default_graph()
+        tf.train.import_meta_graph(path + '/model' + str(model_id) + '.meta')
+#        saver.restore(self.sess, path + '/model' + str(model_id) + '.ckpt')
+        lock.release()
+
+    def load_default(self, path):
         ckpt = tf.train.get_checkpoint_state(path)
         self.saver.restore(self.sess, ckpt.model_checkpoint_path)
         self.train_step = int(ckpt.model_checkpoint_path.split('-')[-1])
