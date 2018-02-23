@@ -107,6 +107,9 @@ class FullyConvPolicy:
             scope="fc1",
             trainable=self.trainable
         )
+
+        print(fc1)
+
         action_id_probs = layers.fully_connected(
             fc1,
             num_outputs=len(actions.FUNCTIONS),
@@ -143,3 +146,10 @@ class FullyConvPolicy:
         self.action_id_log_probs = action_id_log_probs
         self.spatial_action_log_probs = spatial_action_log_probs
         return self
+
+#    def restore(self):
+#        self.value_estimate = value_estimate
+#        self.action_id_probs = action_id_probs
+#        self.spatial_action_probs = spatial_action_probs
+#        self.action_id_log_probs = action_id_log_probs
+#        self.spatial_action_log_probs = spatial_action_log_probs

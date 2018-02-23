@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, time
 import tensorflow as tf
 from datetime import datetime
 from functools import partial
@@ -22,27 +22,30 @@ class Worker:
             agent.flush_summaries()
             sys.stdout.flush()
 
-    def __init__(self, remote, remote_id, flags, config, lock):
+    def __init__(self, remote, remote_id, flags, config, lock, rebuilding=False, outperforming_id=-1):
         self.remote = remote
         self.id = remote_id
         self.lock = lock
+        self.config = config
+        self.flags = flags
         self.batches_per_pbt_eval = flags.K_batches_per_eval * 1000
         self.envs = []
         self.agent = self.runner = None
         tf.reset_default_graph()
-        self.session = tf.Session(config=config.tf_config)
+        self.session = tf.Session(config=self.config.tf_config)
         # Get the Worker unit ready for work.
-        Worker.prepare_env_args(flags)
-        self.build_envs(Worker.prepare_env_args(flags), flags.n_envs_per_model)
-        self.build_agent(flags, config)
-        self.build_runner(flags, config)
+        Worker.prepare_env_args(self.flags)
+        self.build_envs(Worker.prepare_env_args(self.flags), self.flags.n_envs_per_model)
 
         # An object for saving and restoring models from storage.
-        self.saver = tf.train.Saver()
+        self.saver = None
+
+        self.build_agent(rebuilding, outperforming_id)
+        self.build_runner(self.flags, self.config)
 
         # Waiting here for permission to start working.
         if self.can_start_working():
-            self.work(flags)
+            self.work(self.flags)
         else:
             remote.close()
 
@@ -61,32 +64,60 @@ class Worker:
         self.envs = SubprocVecEnv((partial(make_sc2env, **env_args),) * envs_per_model)
         # return SingleEnv(make_sc2env(**env_args))
 
-    def build_agent(self, flags, config):
+    def build_agent(self, rebuilding=False, outperforming_id=0):
         # Set up the agent structure.
         self.agent = ActorCriticAgent(
             session=self.session,
             id=self.id,
             unit_type_emb_dim=5,
-            spatial_dim=flags.resolution,
-            loss_value_weight=flags.loss_value_weight,
-            entropy_weight_action_id=flags.entropy_weight_action,
-            entropy_weight_spatial=flags.entropy_weight_spatial,
-            scalar_summary_freq=flags.scalar_summary_freq,
-            all_summary_freq=flags.all_summary_freq,
-            summary_path=(config.full_summary_path + str(self.id)),
-            max_gradient_norm=flags.max_gradient_norm,
-            optimiser_pars=dict(learning_rate=flags.optimiser_lr,
-                                epsilon=flags.optimiser_eps)
+            spatial_dim=self.flags.resolution,
+            loss_value_weight=self.flags.loss_value_weight,
+            entropy_weight_action_id=self.flags.entropy_weight_action,
+            entropy_weight_spatial=self.flags.entropy_weight_spatial,
+            scalar_summary_freq=self.flags.scalar_summary_freq,
+            all_summary_freq=self.flags.all_summary_freq,
+            summary_path=(self.config.full_summary_path + str(self.id)),
+            max_gradient_norm=self.flags.max_gradient_norm,
+            optimiser_pars=dict(learning_rate=self.flags.optimiser_lr,
+                                epsilon=self.flags.optimiser_eps)
         )
+
         self.agent.build_model()  # Build the agent model
+
+        # An object for saving and restoring models from storage.
+        self.saver = tf.train.Saver()
+
         # TODO this loads last checkpoint model...explore new hyperparameters to
         # TODO differentiate loaded models?
         # TODO also, maybe init is needed to call only once for all agents!
-        if os.path.exists(config.full_checkpoint_path):
-            self.agent.load_default(config.full_checkpoint_path)
+        if rebuilding:
+            self.agent.load(self.config.full_checkpoint_path, outperforming_id, self.lock, self.saver)
+        elif os.path.exists(self.config.full_checkpoint_path):
+            self.agent.load_default(self.config.full_checkpoint_path)
         else:
             self.agent.init()
+
         return self.agent
+
+    def rebuild_agent(self):
+        self.agent = ActorCriticAgent(
+            session=self.session,
+            id=self.id,
+            unit_type_emb_dim=5,
+            spatial_dim=self.flags.resolution,
+            loss_value_weight=self.flags.loss_value_weight,
+            entropy_weight_action_id=self.flags.entropy_weight_action,
+            entropy_weight_spatial=self.flags.entropy_weight_spatial,
+            scalar_summary_freq=self.flags.scalar_summary_freq,
+            all_summary_freq=self.flags.all_summary_freq,
+            summary_path=(self.config.full_summary_path + str(self.id)),
+            max_gradient_norm=self.flags.max_gradient_norm,
+            # TODO modify opt_pars?
+            optimiser_pars=dict(learning_rate=self.flags.optimiser_lr,
+                                epsilon=self.flags.optimiser_eps)
+        )
+
+        self.agent.temp_rebuild()
 
     def build_runner(self, flags, config):
 
@@ -109,7 +140,7 @@ class Worker:
 
     def work(self, flags):
         print("Agent n." + str(self.id) + " reporting for duty!", flush=True)
-
+        self.agent.save(self.runner.checkpoint_path, self.lock, self.saver)
         cmd = ""
         action = ""
         i = 0
@@ -152,7 +183,36 @@ class Worker:
         except KeyboardInterrupt:
             pass
 
-        self.remote.send(('done'))
+#         self.remote.send(('done'))
+        self.remote.close()
+
+
+    # def load_better_model(self, path, model_id):
+    #     print("Before closing session.")
+    #     time.sleep(10)
+    #     self.session.close()
+    #     print("After closing session.")
+    #     time.sleep(10)
+    #     tf.reset_default_graph()
+    #     print("After resetting default graph.")
+    #     time.sleep(10)
+    #     self.session = tf.Session(config=self.config.tf_config)
+    #     print("After starting a new session.")
+    #     time.sleep(10)
+    #     print("loaded a more successful model" + str(model_id) + " instead of model" + str(self.id))
+    #     self.lock.acquire()
+    #     self.saver = tf.train.import_meta_graph(path + '/model' + str(model_id) + '.ckpt.meta')
+    #     self.saver.restore(self.session, path + '/model' + str(model_id) + '.ckpt')
+    #     self.lock.release()
+    #     print("After restoring model from saver.")
+    #     time.sleep(10)
+    #     print(tf.get_default_graph().get_operations())
+    #     self.rebuild_agent()
+    #     self.runner.update_agent(self.agent)
+
+    def load_better_model(self):
+        self.envs.close()
+        self.remote.send(('yield', self.id, None))
         self.remote.close()
 
     def evaluate_and_update_model(self):
@@ -165,7 +225,9 @@ class Worker:
         # Updating...
 
         if cmd == 'restore':
-            self.agent.load(self.runner.checkpoint_path, arg, self.lock, self.saver)
+            self.load_better_model()
+            return True
+#            self.agent.load(self.runner.checkpoint_path, arg, self.lock, self.saver)
         elif cmd == 'save':
             self.agent.save(self.runner.checkpoint_path, self.lock, self.saver)
         else:

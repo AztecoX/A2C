@@ -40,9 +40,9 @@ class Runner(object):
 
     def _handle_episode_end(self, timestep):
         score = timestep.observation["score_cumulative"][0]
-        print("episode %d ended. Score %f" % (self.episode_counter, score))
         self._log_score_to_tb(score)
         self.accumulated_score += score
+        print("episode %d ended. Score %f, AccScore %f" % (self.episode_counter, score, self.accumulated_score))
         self.episode_counter += 1
 
     def get_and_reset_score(self):
@@ -101,3 +101,6 @@ class Runner(object):
         sys.stdout.flush()
 
         return full_input
+
+    def update_agent(self, agent):
+        self.agent = agent

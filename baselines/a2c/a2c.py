@@ -196,6 +196,84 @@ class ActorCriticAgent:
 
         self.summary_writer = tf.summary.FileWriter(self.summary_path, self.sess.graph)
 
+    def temp_rebuild(self):
+        a = tf.get_default_graph().get_operation_by_name("fully_connected")
+        print(a)
+
+    def rebuild_model(self):
+        self.placeholders = _get_placeholders(self.spatial_dim)
+
+        # Here, the actual policy network is built.
+        with tf.variable_scope("theta"):
+            theta = self.policy(self, trainable=True).build()
+
+        selected_spatial_action_flat = ravel_index_pairs(
+            self.placeholders.selected_spatial_action, self.spatial_dim
+        )
+
+        selected_log_probs = self._get_select_action_probs(theta, selected_spatial_action_flat)
+
+        # maximum is to avoid 0 / 0 because this is used to calculate some means
+        sum_spatial_action_available = tf.maximum(
+            1e-10, tf.reduce_sum(self.placeholders.is_spatial_action_available)
+        )
+
+        neg_entropy_spatial = tf.reduce_sum(
+            theta.spatial_action_probs * theta.spatial_action_log_probs
+        ) / sum_spatial_action_available
+        neg_entropy_action_id = tf.reduce_mean(tf.reduce_sum(
+            theta.action_id_probs * theta.action_id_log_probs, axis=1
+        ))
+
+        self.sampled_action_id = weighted_random_sample(theta.action_id_probs)
+        self.sampled_spatial_action = weighted_random_sample(theta.spatial_action_probs)
+        self.value_estimate = theta.value_estimate
+        policy_loss = -tf.reduce_mean(selected_log_probs.total * self.placeholders.advantage)
+
+        value_loss = tf.losses.mean_squared_error(
+            self.placeholders.value_target, theta.value_estimate)
+
+        loss = (
+            policy_loss
+            + value_loss * self.loss_value_weight
+            + neg_entropy_spatial * self.entropy_weight_spatial
+            + neg_entropy_action_id * self.entropy_weight_action_id
+        )
+
+        self.train_op = layers.optimize_loss(
+            loss=loss,
+            global_step=tf.train.get_global_step(),
+            optimizer=self.optimiser,
+            clip_gradients=self.max_gradient_norm,
+            summaries=OPTIMIZER_SUMMARIES,
+            learning_rate=None,
+            name="train_op"
+        )
+
+        self._scalar_summary("value/estimate", tf.reduce_mean(self.value_estimate))
+        self._scalar_summary("value/target", tf.reduce_mean(self.placeholders.value_target))
+        self._scalar_summary("action/is_spatial_action_available",
+            tf.reduce_mean(self.placeholders.is_spatial_action_available))
+        self._scalar_summary("action/selected_id_log_prob",
+            tf.reduce_mean(selected_log_probs.action_id))
+        self._scalar_summary("loss/policy", policy_loss)
+        self._scalar_summary("loss/value", value_loss)
+        self._scalar_summary("loss/neg_entropy_spatial", neg_entropy_spatial)
+        self._scalar_summary("loss/neg_entropy_action_id", neg_entropy_action_id)
+        self._scalar_summary("loss/total", loss)
+        self._scalar_summary("value/advantage", tf.reduce_mean(self.placeholders.advantage))
+        self._scalar_summary("action/selected_total_log_prob",
+            tf.reduce_mean(selected_log_probs.total))
+        self._scalar_summary("action/selected_spatial_log_prob",
+            tf.reduce_sum(selected_log_probs.spatial) / sum_spatial_action_available)
+
+        self.init_op = tf.global_variables_initializer()
+        self.saver = tf.train.Saver(max_to_keep=2)
+        self.all_summary_op = tf.summary.merge_all(tf.GraphKeys.SUMMARIES)
+        self.scalar_summary_op = tf.summary.merge(tf.get_collection(self._scalar_summary_key))
+
+        self.summary_writer = tf.summary.FileWriter(self.summary_path, self.sess.graph)
+
     def _input_to_feed_dict(self, input_dict):
         return {k + ":0": v for k, v in input_dict.items()}
 
@@ -256,15 +334,13 @@ class ActorCriticAgent:
         print("saving model to %s" % (path + '/model' + str(self.id) + '.meta'))
         lock.acquire()
         tf.train.export_meta_graph(filename=path + '/model' + str(self.id) + '.meta')
-#        saver.save(self.sess, path + '/model' + str(self.id) + '.ckpt')
+        saver.save(self.sess, path + '/model' + str(self.id) + '.ckpt')
         lock.release()
 
     def load(self, path, model_id, lock, saver):
-        print("loaded a more successful model" + str(model_id) + " instead of model" + str(self.id))
+        print("loading a more successful model" + str(model_id) + " instead of model" + str(self.id))
         lock.acquire()
-        tf.reset_default_graph()
-        tf.train.import_meta_graph(path + '/model' + str(model_id) + '.meta')
-#        saver.restore(self.sess, path + '/model' + str(model_id) + '.ckpt')
+        saver.restore(self.sess, path + '/model' + str(model_id) + '.ckpt')
         lock.release()
 
     def load_default(self, path):
