@@ -15,7 +15,7 @@ class Config:
         flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap feature layers.")
         flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
         flags.DEFINE_integer("n_models", 2, "Number of models being trained in parallel by PBT.")
-        flags.DEFINE_integer("n_envs_per_model", 1, "Number of environments to run in parallel")
+        flags.DEFINE_integer("n_envs_per_model", 4, "Number of environments to run in parallel")
         flags.DEFINE_integer("n_steps_per_batch", 8,
                              "Number of steps per batch, EXPERIMENT WITH THIS?")
         flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
@@ -61,4 +61,4 @@ class Config:
         FLAGS = flags.FLAGS
         self.tf_config = tf.ConfigProto()
         self.tf_config.gpu_options.allow_growth = True # Necessary, otherwise the processes eat up everything.
-        self.tf_config.gpu_options.per_process_gpu_memory_fraction = 1.0 / FLAGS.n_models
+        self.tf_config.gpu_options.per_process_gpu_memory_fraction = 0.90 / FLAGS.n_models

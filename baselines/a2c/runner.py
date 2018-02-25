@@ -38,11 +38,11 @@ class Runner(object):
         summary.value.add(tag='sc2/episode_score', simple_value=score)
         self.agent.summary_writer.add_summary(summary, self.episode_counter)
 
-    def _handle_episode_end(self, timestep):
+    def _handle_episode_end(self, model_id, timestep):
         score = timestep.observation["score_cumulative"][0]
         self._log_score_to_tb(score)
         self.accumulated_score += score
-        print("episode %d ended. Score %f, AccScore %f" % (self.episode_counter, score, self.accumulated_score))
+        print("Episode %d ended for model n. %d. Score %f, AccScore %f" % (self.episode_counter, model_id, score, self.accumulated_score))
         self.episode_counter += 1
 
     def get_and_reset_score(self):
@@ -75,7 +75,7 @@ class Runner(object):
 
             for t in obs_raw:
                 if t.last():
-                    self._handle_episode_end(t)
+                    self._handle_episode_end(self.agent.id, t)
 
         mb_values[:, -1] = self.agent.get_value(latest_obs)
 

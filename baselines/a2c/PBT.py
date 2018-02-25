@@ -1,6 +1,8 @@
 from multiprocessing import Process, Pipe, Lock, connection
 import numpy as np
 from baselines.a2c.Worker import Worker
+from baselines.common.multienv import SubprocVecEnv, make_sc2env, SingleEnv
+from functools import partial
 
 
 class PBT:
@@ -9,6 +11,25 @@ class PBT:
         self.flags = flags
         self.config = config
         self.lock = Lock() # lock for .ckpt models file access
+        self.env_groups = self.build_envs(Worker.prepare_env_args(self.flags))
+
+    @staticmethod
+    def prepare_env_args(flags):
+        return dict(
+            map_name=flags.map_name,
+            step_mul=flags.step_mul,
+            game_steps_per_episode=0,
+            screen_size_px=(flags.resolution,) * 2,
+            minimap_size_px=(flags.resolution,) * 2,
+            visualize=flags.visualize
+        )
+
+    def build_envs(self, env_args):
+        env_groups = []
+        for i in range(self.flags.n_models):
+            env_groups.append(SubprocVecEnv((partial(make_sc2env, **env_args),)
+                                  * self.flags.n_envs_per_model))
+        return env_groups
 
     def reset_process(self, id_assigned, id_outperforming):
         remote, work_remote = Pipe()
@@ -32,6 +53,7 @@ class PBT:
                        self.flags,
                        self.config,
                        self.lock,
+                       self.env_groups[id_assigned],
                        True,
                        id_outperforming
                        )
@@ -49,7 +71,8 @@ class PBT:
                            n,
                            self.flags,
                            self.config,
-                           self.lock)
+                           self.lock,
+                           self.env_groups[n])
 
             self.ps.append(Process(target=Worker,
                                    args=worker_args))
@@ -70,10 +93,10 @@ class PBT:
             requests = connection.wait(self.remotes, timeout=5)
             if len(requests) != 0:
                 for r in requests:
-                    msg, worker_id, score = r.recv()
+                    msg, worker_id, arg = r.recv()
                     if msg == 'evaluate':
-                        scores[worker_id] = score
-                        if np.median(scores) > score:
+                        scores[worker_id] = arg
+                        if np.median(scores) > arg:
                             # Current model not good enough,
                             # exploit+explore a better one.
                             r.send(('restore', np.argmax(scores)))
@@ -84,7 +107,7 @@ class PBT:
                         # The process has to be restarted to make space for
                         # a new one, since tf does only
                         # release GPU resources correctly on process exit.
-                        self.restart_process(r, worker_id, np.argmax(scores))
+                        self.restart_process(worker_id, np.argmax(scores), arg)
                     elif msg == 'done':
                         self.finish_processes()
 
@@ -92,16 +115,16 @@ class PBT:
         for r in self.remotes:
             r.send(('close', None))
 
-    def start_process(self, outperformed_id):
+    def start_process(self, outperformed_id, episode_counter=0):
         self.ps[outperformed_id].start()
-        self.remotes[outperformed_id].send(('begin', None))
+        self.remotes[outperformed_id].send(('begin', episode_counter))
 
-    def restart_process(self, remote, outperformed_id, outperforming_id):
+    def restart_process(self, outperformed_id, outperforming_id, episode_counter):
         self.ps[outperformed_id].join()
 
         self.reset_process(outperformed_id, outperforming_id)
 
-        self.start_process(outperformed_id)
+        self.start_process(outperformed_id, episode_counter)
         # TODO build the new one based on outperforming one.
 
     def finish_processes(self):

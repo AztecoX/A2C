@@ -22,20 +22,20 @@ class Worker:
             agent.flush_summaries()
             sys.stdout.flush()
 
-    def __init__(self, remote, remote_id, flags, config, lock, rebuilding=False, outperforming_id=-1):
+    def __init__(self, remote, remote_id, flags, config, lock, envs, rebuilding=False, outperforming_id=-1):
         self.remote = remote
         self.id = remote_id
         self.lock = lock
         self.config = config
         self.flags = flags
+        self.episode_counter = 0
         self.batches_per_pbt_eval = flags.K_batches_per_eval * 1000
-        self.envs = []
+        self.envs = envs
         self.agent = self.runner = None
         tf.reset_default_graph()
         self.session = tf.Session(config=self.config.tf_config)
         # Get the Worker unit ready for work.
-        Worker.prepare_env_args(self.flags)
-        self.build_envs(Worker.prepare_env_args(self.flags), self.flags.n_envs_per_model)
+#        self.build_envs(Worker.prepare_env_args(self.flags), self.flags.n_envs_per_model)
 
         # An object for saving and restoring models from storage.
         self.saver = None
@@ -135,7 +135,8 @@ class Worker:
 
     # Blocking wait for permission to work.
     def can_start_working(self):
-        cmd, _ = self.remote.recv()
+        cmd, arg = self.remote.recv()
+        self.episode_counter = arg
         return cmd == 'begin'
 
     def work(self, flags):
@@ -186,33 +187,8 @@ class Worker:
 #         self.remote.send(('done'))
         self.remote.close()
 
-
-    # def load_better_model(self, path, model_id):
-    #     print("Before closing session.")
-    #     time.sleep(10)
-    #     self.session.close()
-    #     print("After closing session.")
-    #     time.sleep(10)
-    #     tf.reset_default_graph()
-    #     print("After resetting default graph.")
-    #     time.sleep(10)
-    #     self.session = tf.Session(config=self.config.tf_config)
-    #     print("After starting a new session.")
-    #     time.sleep(10)
-    #     print("loaded a more successful model" + str(model_id) + " instead of model" + str(self.id))
-    #     self.lock.acquire()
-    #     self.saver = tf.train.import_meta_graph(path + '/model' + str(model_id) + '.ckpt.meta')
-    #     self.saver.restore(self.session, path + '/model' + str(model_id) + '.ckpt')
-    #     self.lock.release()
-    #     print("After restoring model from saver.")
-    #     time.sleep(10)
-    #     print(tf.get_default_graph().get_operations())
-    #     self.rebuild_agent()
-    #     self.runner.update_agent(self.agent)
-
     def load_better_model(self):
-        self.envs.close()
-        self.remote.send(('yield', self.id, None))
+        self.remote.send(('yield', self.id, self.runner.episode_counter))
         self.remote.close()
 
     def evaluate_and_update_model(self):
