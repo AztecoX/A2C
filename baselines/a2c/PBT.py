@@ -89,17 +89,17 @@ class PBT:
     def handle_requests(self):
         scores = np.zeros(self.flags.n_models, dtype=int)
         while True:
-            # Master checks for Worker requests.
+            # Master checks for Worker requests and resolves them.
             requests = connection.wait(self.remotes, timeout=5)
             if len(requests) != 0:
                 for r in requests:
                     msg, worker_id, arg = r.recv()
                     if msg == 'evaluate':
                         scores[worker_id] = arg
-                        if np.median(scores) > arg:
-                            # Current model not good enough,
-                            # exploit+explore a better one.
-                            r.send(('restore', np.argmax(scores)))
+                        is_underperforming, outperforming_model = self.is_model_underperforming(scores, worker_id)
+                        if is_underperforming:
+                            # Current model not good enough, exploit+explore a better one.
+                            r.send(('restore', outperforming_model))
                         else:
                             # Current model worth training further.
                             r.send(('save', None))
@@ -130,3 +130,49 @@ class PBT:
     def finish_processes(self):
         for p in self.ps:
             p.join()
+
+    def is_model_underperforming(self, scores, worker_id):
+        if self.flags.exploration_threshold_metric == "20_percent_top_and_bottom":
+            return self.exploration_20_percent_metric(scores, worker_id)
+        else:
+            return False, -1
+
+    def exploration_20_percent_metric(self, scores, worker_id):
+        threshold_modifier = 5.0                # 20% means roughly every fifth model
+        if len(scores) <= threshold_modifier:   # If there are 5 or less models, it is straightforward
+            if worker_id == np.argmin(scores):
+                return True, np.argmax(scores)
+            else:
+                return False, -1
+        else:
+            counter = 0
+            comparison_counter = 0
+            # Threshold decides how many models fit into the top and bottom 20% category.
+            threshold = int(np.ceil(len(scores) / threshold_modifier))
+            while counter < len(scores):
+                if (scores[counter] < scores[worker_id]) and (worker_id != counter):
+                    comparison_counter += 1
+                counter += 1
+
+            if comparison_counter < threshold:
+                # It has been determined, that the model will be replaced.
+                # Now it has to be decided, which one will replace it.
+
+                # Getting the best performing candidates...
+                candidates = self.get_best_performing_candidates(scores, threshold)
+
+                # Choosing one of them at random:
+                return True, candidates[np.random.randint(0, threshold - 1)]
+            else:
+                return False, -1
+
+    @staticmethod
+    def get_best_performing_candidates(scores, threshold):
+        candidates = []
+        sc = list(scores)
+        for i in range(threshold - 1):
+            x = np.argmax(sc)
+            candidates.append(x)
+            sc[x] = -1
+
+        return candidates

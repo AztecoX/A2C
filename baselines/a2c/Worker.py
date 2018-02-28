@@ -1,4 +1,5 @@
 import os, sys, time
+import numpy as np
 import tensorflow as tf
 from datetime import datetime
 from functools import partial
@@ -40,6 +41,8 @@ class Worker:
         # An object for saving and restoring models from storage.
         self.saver = None
 
+        self.randomize_hyperparams()
+
         self.build_agent(rebuilding, outperforming_id)
         self.build_runner(self.flags, self.config)
 
@@ -71,15 +74,15 @@ class Worker:
             id=self.id,
             unit_type_emb_dim=5,
             spatial_dim=self.flags.resolution,
-            loss_value_weight=self.flags.loss_value_weight,
-            entropy_weight_action_id=self.flags.entropy_weight_action,
-            entropy_weight_spatial=self.flags.entropy_weight_spatial,
+            loss_value_weight=self.loss_value_weight,
+            entropy_weight_action_id=self.entropy_weight_action,
+            entropy_weight_spatial=self.entropy_weight_spatial,
             scalar_summary_freq=self.flags.scalar_summary_freq,
             all_summary_freq=self.flags.all_summary_freq,
             summary_path=(self.config.full_summary_path + str(self.id)),
-            max_gradient_norm=self.flags.max_gradient_norm,
-            optimiser_pars=dict(learning_rate=self.flags.optimiser_lr,
-                                epsilon=self.flags.optimiser_eps)
+            max_gradient_norm=self.max_gradient_norm,
+            optimiser_pars=dict(learning_rate=self.optimiser_lr,
+                                epsilon=self.optimiser_eps)
         )
 
         self.agent.build_model()  # Build the agent model
@@ -100,31 +103,41 @@ class Worker:
         return self.agent
 
     def rebuild_agent(self):
+
         self.agent = ActorCriticAgent(
             session=self.session,
             id=self.id,
             unit_type_emb_dim=5,
             spatial_dim=self.flags.resolution,
-            loss_value_weight=self.flags.loss_value_weight,
-            entropy_weight_action_id=self.flags.entropy_weight_action,
-            entropy_weight_spatial=self.flags.entropy_weight_spatial,
+            loss_value_weight=self.loss_value_weight,
+            entropy_weight_action_id=self.entropy_weight_action,
+            entropy_weight_spatial=self.entropy_weight_spatial,
             scalar_summary_freq=self.flags.scalar_summary_freq,
             all_summary_freq=self.flags.all_summary_freq,
             summary_path=(self.config.full_summary_path + str(self.id)),
-            max_gradient_norm=self.flags.max_gradient_norm,
+            max_gradient_norm=self.max_gradient_norm,
             # TODO modify opt_pars?
-            optimiser_pars=dict(learning_rate=self.flags.optimiser_lr,
-                                epsilon=self.flags.optimiser_eps)
+            optimiser_pars=dict(learning_rate=self.optimiser_lr,
+                                epsilon=self.optimiser_eps)
         )
 
         self.agent.temp_rebuild()
+
+    def randomize_hyperparams(self):
+        self.max_gradient_norm = np.random.uniform(self.flags.min_max_gradient_norm, self.flags.max_max_gradient_norm)
+        self.discount = np.random.uniform(self.flags.min_discount, self.flags.max_discount)
+        self.loss_value_weight = np.random.uniform(self.flags.min_loss_value_weight, self.flags.max_loss_value_weight)
+        self.optimiser_lr = np.random.uniform(self.flags.min_optimiser_lr, self.flags.max_optimiser_lr)
+        self.optimiser_eps = np.random.uniform(self.flags.min_optimiser_eps, self.flags.max_optimiser_eps)
+        self.entropy_weight_spatial = np.random.uniform(self.flags.min_entropy_weight_spatial, self.flags.max_entropy_weight_spatial)
+        self.entropy_weight_action = np.random.uniform(self.flags.min_entropy_weight_action, self.flags.max_entropy_weight_action)
 
     def build_runner(self, flags, config):
 
         self.runner = Runner(
             envs=self.envs,
             agent=self.agent,
-            discount=flags.discount,
+            discount=self.discount,
             n_steps=flags.n_steps_per_batch,
             checkpoint_path=config.full_checkpoint_path
         )

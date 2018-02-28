@@ -14,8 +14,8 @@ class Config:
         flags.DEFINE_bool("visualize", False, "Whether to render with pygame.")
         flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap feature layers.")
         flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
-        flags.DEFINE_integer("n_models", 2, "Number of models being trained in parallel by PBT.")
-        flags.DEFINE_integer("n_envs_per_model", 4, "Number of environments to run in parallel")
+        flags.DEFINE_integer("n_models", 1, "Number of models being trained in parallel by PBT.")
+        flags.DEFINE_integer("n_envs_per_model", 1, "Number of environments to run in parallel")
         flags.DEFINE_integer("n_steps_per_batch", 8,
                              "Number of steps per batch, EXPERIMENT WITH THIS?")
         flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
@@ -35,15 +35,31 @@ class Config:
                           "What to do if summary and model output exists, only for training, is ignored if notraining")
 
         flags.DEFINE_float("max_gradient_norm", 500.0, "good value might depend on the environment")
+        flags.DEFINE_float("min_max_gradient_norm", 150.0, "good value might depend on the environment")
+        flags.DEFINE_float("max_max_gradient_norm", 700.0, "good value might depend on the environment")
 
         flags.DEFINE_float("discount", 0.95, "Reward-discount for the agent")
+        flags.DEFINE_float("min_discount", 0.90, "Reward-discount for the agent")
+        flags.DEFINE_float("max_discount", 0.999, "Reward-discount for the agent")
         flags.DEFINE_float("loss_value_weight", 1.0, "good value might depend on the environment")
+        flags.DEFINE_float("min_loss_value_weight", 0.8, "good value might depend on the environment")
+        flags.DEFINE_float("max_loss_value_weight", 1.2, "good value might depend on the environment")
         flags.DEFINE_float("optimiser_lr", 1e-4, "Optimiser learning rate")
+        flags.DEFINE_float("min_optimiser_lr", 1e-7, "Optimiser learning rate")
+        flags.DEFINE_float("max_optimiser_lr", 1e-3, "Optimiser learning rate")
         flags.DEFINE_float("optimiser_eps", 1e-7, "Optimiser parameter preventing by-zero division.")
-        flags.DEFINE_float("entropy_weight_spatial", 1e-4,
-                          "entropy of spatial action distribution loss weight")
+        flags.DEFINE_float("min_optimiser_eps", 1e-9, "Optimiser parameter preventing by-zero division.")
+        flags.DEFINE_float("max_optimiser_eps", 1e-5, "Optimiser parameter preventing by-zero division.")
+        flags.DEFINE_float("entropy_weight_spatial", 1e-4, "entropy of spatial action distribution loss weight")
+        flags.DEFINE_float("min_entropy_weight_spatial", 1e-6, "entropy of spatial action distribution loss weight")
+        flags.DEFINE_float("max_entropy_weight_spatial", 1e-2, "entropy of spatial action distribution loss weight")
         flags.DEFINE_float("entropy_weight_action", 1e-4, "entropy of action-id distribution loss weight")
+        flags.DEFINE_float("min_entropy_weight_action", 1e-6, "entropy of action-id distribution loss weight")
+        flags.DEFINE_float("max_entropy_weight_action", 1e-2, "entropy of action-id distribution loss weight")
 
+# Exploration related variables
+        flags.DEFINE_enum("exploration_threshold_metric", "20_percent_top_and_bottom", ["20_percent_top_and_bottom"],
+                          "What is the threshold for underperforming model recognition.")
 
     def set_paths(self):
         FLAGS = flags.FLAGS
