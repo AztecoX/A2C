@@ -1,11 +1,12 @@
 import os
 import shutil
 import sys
+sys.path.append('../..')
 from datetime import datetime
 from absl import flags
-from baselines.a2c.PBTManager import PBTManager
+from baselines.PBT.PBTManager import PBTManager
 
-from baselines.a2c.config import Config
+from config import Config
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)

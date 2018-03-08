@@ -29,7 +29,6 @@ class Worker:
         self.lock = lock
         self.config = config
         self.flags = flags
-        self.episode_counter = 0
         self.batches_per_pbt_eval = flags.K_batches_per_eval * 1000
         self.envs = envs
         self.agent = self.runner = None
@@ -41,7 +40,10 @@ class Worker:
         # An object for saving and restoring models from storage.
         self.saver = None
 
-        self.randomize_hyperparams()
+        if self.flags.randomize_hyperparams:
+            self.randomize_hyperparams()
+        else:
+            self.initialize_hyperparams()
 
         self.build_agent(rebuilding, outperforming_id)
         self.build_runner(self.flags, self.config)
@@ -132,6 +134,15 @@ class Worker:
         self.entropy_weight_spatial = np.random.uniform(self.flags.min_entropy_weight_spatial, self.flags.max_entropy_weight_spatial)
         self.entropy_weight_action = np.random.uniform(self.flags.min_entropy_weight_action, self.flags.max_entropy_weight_action)
 
+    def initialize_hyperparams(self):
+        self.max_gradient_norm = self.flags.max_gradient_norm
+        self.discount = self.flags.discount
+        self.loss_value_weight = self.flags.loss_value_weight
+        self.optimiser_lr = self.flags.optimiser_lr
+        self.optimiser_eps = self.flags.optimiser_eps
+        self.entropy_weight_spatial = self.flags.entropy_weight_spatial
+        self.entropy_weight_action = self.flags.entropy_weight_action
+
     def build_runner(self, flags, config):
 
         self.runner = Runner(
@@ -149,7 +160,7 @@ class Worker:
     # Blocking wait for permission to work.
     def can_start_working(self):
         cmd, arg = self.remote.recv()
-        self.episode_counter = arg
+        self.runner.episode_counter = arg
         return cmd == 'begin'
 
     def work(self, flags):
@@ -197,7 +208,7 @@ class Worker:
         except KeyboardInterrupt:
             pass
 
-#         self.remote.send(('done'))
+        self.remote.send(('done'))
         self.remote.close()
 
     def load_better_model(self):

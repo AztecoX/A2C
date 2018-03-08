@@ -1,11 +1,8 @@
-from collections import namedtuple
-
 import numpy as np
 import sys
 from baselines.a2c.a2c import ActorCriticAgent
 from baselines.common.preprocess import ObsProcesser, ActionProcesser, FEATURE_KEYS
-from baselines.a2c.utils import calculate_n_step_reward, general_n_step_advantage, combine_first_dimensions, \
-    dict_of_lists_to_list_of_dicst
+from baselines.common.utils import general_n_step_advantage, combine_first_dimensions
 import tensorflow as tf
 from absl import flags
 

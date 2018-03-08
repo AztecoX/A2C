@@ -1,7 +1,7 @@
 from multiprocessing import Process, Pipe, Lock, connection
 import numpy as np
-from baselines.a2c.Worker import Worker
-from baselines.common.multienv import SubprocVecEnv, make_sc2env, SingleEnv
+from baselines.PBT.Worker import Worker
+from baselines.common.multienv import SubprocVecEnv, make_sc2env
 from functools import partial
 
 
@@ -84,7 +84,7 @@ class PBT:
 
     def run_workers(self):
         for r in self.remotes:
-            r.send(('begin', None))
+            r.send(('begin', 0))
 
     def handle_requests(self):
         scores = np.zeros(self.flags.n_models, dtype=int)
@@ -134,7 +134,7 @@ class PBT:
     def is_model_underperforming(self, scores, worker_id):
         if self.flags.exploration_threshold_metric == "20_percent_top_and_bottom":
             return self.exploration_20_percent_metric(scores, worker_id)
-        else:
+        else: # Add other metrics if desired.
             return False, -1
 
     def exploration_20_percent_metric(self, scores, worker_id):
