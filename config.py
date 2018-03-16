@@ -15,8 +15,8 @@ class Config:
         flags.DEFINE_bool("visualize", False, "Whether to render with pygame.")
         flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap feature layers.")
         flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
-        flags.DEFINE_integer("n_models", 2, "Number of models being trained in parallel by PBT.")
-        flags.DEFINE_integer("n_envs_per_model", 1, "Number of environments to run in parallel per model.")
+        flags.DEFINE_integer("n_models", 1, "Number of models being trained in parallel by PBT.")
+        flags.DEFINE_integer("n_envs_per_model", 16, "Number of environments to run in parallel per model.")
         flags.DEFINE_integer("n_steps_per_batch", 8,
                              "Number of steps per batch.")
         flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
