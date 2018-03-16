@@ -69,7 +69,7 @@ class Config:
 # Exploration related variables
         flags.DEFINE_enum("exploitation_threshold_metric", "20_percent_top_and_bottom", ["20_percent_top_and_bottom", "Nothing"],
                           "What is the threshold for underperforming model recognition.")
-        flags.DEFINE_integer("exploitation_worth_percentage", 0.10,
+        flags.DEFINE_float("exploitation_worth_percentage", 0.10,
                           "The best model has to outperform the current one by 'exploitation_worth_percentage'"
                           " percent to consider replacing it.")
 
