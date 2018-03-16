@@ -23,7 +23,7 @@ class Worker:
             agent.flush_summaries()
             sys.stdout.flush()
 
-    def __init__(self, remote, remote_id, flags, config, lock, envs, rebuilding=False, outperforming_id=-1):
+    def __init__(self, remote, remote_id, flags, config, lock, envs, rebuilding=False, outperforming_id=-1, step_counter=0):
         self.remote = remote
         self.id = remote_id
         self.lock = lock
@@ -32,7 +32,10 @@ class Worker:
         self.batches_per_pbt_eval = flags.K_batches_per_eval * 1000
         self.envs = envs
         self.agent = self.runner = None
+        self.step_counter = 0
         tf.reset_default_graph()
+
+        self.global_step_tensor = tf.Variable(step_counter, trainable=False, name="global_step")
         self.session = tf.Session(config=self.config.tf_config)
         # Get the Worker unit ready for work.
 #        self.build_envs(Worker.prepare_env_args(self.flags), self.flags.n_envs_per_model)
@@ -45,7 +48,7 @@ class Worker:
         else:
             self.initialize_hyperparams()
 
-        self.build_agent(rebuilding, outperforming_id)
+        self.build_agent(rebuilding, outperforming_id, step_counter)
         self.build_runner(self.flags, self.config)
 
         # Waiting here for permission to start working.
@@ -69,7 +72,7 @@ class Worker:
         self.envs = SubprocVecEnv((partial(make_sc2env, **env_args),) * envs_per_model)
         # return SingleEnv(make_sc2env(**env_args))
 
-    def build_agent(self, rebuilding=False, outperforming_id=0):
+    def build_agent(self, rebuilding=False, outperforming_id=0, step_counter=0):
         # Set up the agent structure.
         self.agent = ActorCriticAgent(
             session=self.session,
@@ -87,6 +90,8 @@ class Worker:
                                 epsilon=self.optimiser_eps)
         )
 
+        prev_global_step = tf.Variable(step_counter, name='prev_global_step', trainable=False, dtype=tf.int32)
+
         self.agent.build_model()  # Build the agent model
 
         # An object for saving and restoring models from storage.
@@ -97,33 +102,19 @@ class Worker:
         # TODO also, maybe init is needed to call only once for all agents!
         if rebuilding:
             self.agent.load(self.config.full_checkpoint_path, outperforming_id, self.lock, self.saver)
+
+            initial_global_step = tf.assign(tf.train.get_global_step(), prev_global_step)
+            print("initial_global_step: %s" % initial_global_step)
+            self.session.run(initial_global_step)
+            print("GLOBAL STEP AFTER: %s" % self.session.run(tf.train.get_global_step()))
+#            tf.train.global_step.assign(self.sess, self.global_step_tensor))
+            self.agent.update_train_step(step_counter)
         elif os.path.exists(self.config.full_checkpoint_path):
             self.agent.load_default(self.config.full_checkpoint_path)
         else:
             self.agent.init()
 
         return self.agent
-
-    def rebuild_agent(self):
-
-        self.agent = ActorCriticAgent(
-            session=self.session,
-            id=self.id,
-            unit_type_emb_dim=5,
-            spatial_dim=self.flags.resolution,
-            loss_value_weight=self.loss_value_weight,
-            entropy_weight_action_id=self.entropy_weight_action,
-            entropy_weight_spatial=self.entropy_weight_spatial,
-            scalar_summary_freq=self.flags.scalar_summary_freq,
-            all_summary_freq=self.flags.all_summary_freq,
-            summary_path=(self.config.full_summary_path + str(self.id)),
-            max_gradient_norm=self.max_gradient_norm,
-            # TODO modify opt_pars?
-            optimiser_pars=dict(learning_rate=self.optimiser_lr,
-                                epsilon=self.optimiser_eps)
-        )
-
-        self.agent.temp_rebuild()
 
     def randomize_hyperparams(self):
         self.max_gradient_norm = np.random.uniform(self.flags.min_max_gradient_norm, self.flags.max_max_gradient_norm)
@@ -159,8 +150,9 @@ class Worker:
 
     # Blocking wait for permission to work.
     def can_start_working(self):
-        cmd, arg = self.remote.recv()
-        self.runner.episode_counter = arg
+        cmd, episode_counter, step_counter = self.remote.recv()
+        self.runner.episode_counter = episode_counter
+        self.step_counter=step_counter
         return cmd == 'begin'
 
     def work(self, flags):
@@ -168,7 +160,7 @@ class Worker:
         self.agent.save(self.runner.checkpoint_path, self.lock, self.saver)
         cmd = ""
         action = ""
-        i = 0
+        i = self.step_counter
         done = False
 
         if flags.K_batches >= 0:
@@ -178,17 +170,11 @@ class Worker:
 
         try:
             while True:
-                # if remote.poll(): # check for messages from the master process
-                # cmd, action = remote.recv()
                 if cmd == 'close':
                     break
                 else:
                     if i % 1000 == 0:
                         Worker._print(i)
-#                    if i % 10000 == 0:
-#                        Worker._save_if_training(self.agent,
-#                                                 self.runner.checkpoint_path,
-#                                                 flags.training)
 
                     training_input = self.runner.run_batch()  # run
 
@@ -200,7 +186,7 @@ class Worker:
                     i += 1
 
                     if i % self.batches_per_pbt_eval == 0:
-                        done = self.evaluate_and_update_model()
+                        done = self.evaluate_and_update_model(i)
 
                     if 0 <= n_batches <= i or done:
                         break
@@ -208,28 +194,28 @@ class Worker:
         except KeyboardInterrupt:
             pass
 
-        self.remote.send(('done'))
+        if not done:
+            self.remote.send(('done', None, None, None))
         self.remote.close()
 
-    def load_better_model(self):
-        self.remote.send(('yield', self.id, self.runner.episode_counter))
+    def load_better_model(self, step_counter):
+        self.remote.send(('yield', self.id, self.runner.episode_counter, step_counter))
         self.remote.close()
 
-    def evaluate_and_update_model(self):
+    def evaluate_and_update_model(self, step_counter):
         # Evaluating...
         self.remote.send(('evaluate',
                           self.id,
-                          self.runner.get_and_reset_score()))
-        cmd, arg = self.remote.recv()
+                          self.runner.get_and_reset_score(), None))
+        cmd, arg, _ = self.remote.recv()
 
         # Updating...
 
         if cmd == 'restore':
-            self.load_better_model()
+            self.load_better_model(step_counter)
             return True
-#            self.agent.load(self.runner.checkpoint_path, arg, self.lock, self.saver)
         elif cmd == 'save':
             self.agent.save(self.runner.checkpoint_path, self.lock, self.saver)
+            return False
         else:
             return True
-        return False

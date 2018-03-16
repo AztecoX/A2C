@@ -31,7 +31,7 @@ class PBT:
                                   * self.flags.n_envs_per_model))
         return env_groups
 
-    def reset_process(self, id_assigned, id_outperforming):
+    def reset_process(self, id_assigned, id_outperforming, step_counter=0):
         remote, work_remote = Pipe()
 
         ps = list(self.ps)
@@ -55,7 +55,8 @@ class PBT:
                        self.lock,
                        self.env_groups[id_assigned],
                        True,
-                       id_outperforming
+                       id_outperforming,
+                       step_counter
                        )
 
         ps.insert(id_assigned, Process(target=Worker,
@@ -84,7 +85,7 @@ class PBT:
 
     def run_workers(self):
         for r in self.remotes:
-            r.send(('begin', 0))
+            r.send(('begin', 0, 0))
 
     def handle_requests(self):
         scores = np.zeros(self.flags.n_models, dtype=int)
@@ -93,51 +94,52 @@ class PBT:
             requests = connection.wait(self.remotes, timeout=5)
             if len(requests) != 0:
                 for r in requests:
-                    msg, worker_id, arg = r.recv()
+                    msg, worker_id, arg, step_counter = r.recv()
                     if msg == 'evaluate':
                         scores[worker_id] = arg
                         is_underperforming, outperforming_model = self.is_model_underperforming(scores, worker_id)
                         if is_underperforming:
                             # Current model not good enough, exploit+explore a better one.
-                            r.send(('restore', outperforming_model))
+                            r.send(('restore', outperforming_model, None))
                         else:
                             # Current model worth training further.
-                            r.send(('save', None))
+                            r.send(('save', None, None))
                     elif msg == 'yield':
                         # The process has to be restarted to make space for
                         # a new one, since tf does only
                         # release GPU resources correctly on process exit.
-                        self.restart_process(worker_id, np.argmax(scores), arg)
+                        self.restart_process(worker_id, np.argmax(scores), arg, step_counter)
                     elif msg == 'done':
                         self.finish_processes()
 
     def stop_workers(self):
         for r in self.remotes:
-            r.send(('close', None))
+            r.send(('close', None, None))
 
     def start_process(self, outperformed_id, episode_counter=0):
         self.ps[outperformed_id].start()
-        self.remotes[outperformed_id].send(('begin', episode_counter))
+        self.remotes[outperformed_id].send(('begin', episode_counter, 0))
 
-    def restart_process(self, outperformed_id, outperforming_id, episode_counter):
+    def restart_process(self, outperformed_id, outperforming_id, episode_counter, step_counter):
         self.ps[outperformed_id].join()
 
-        self.reset_process(outperformed_id, outperforming_id)
+        self.reset_process(outperformed_id, outperforming_id, step_counter)
 
         self.start_process(outperformed_id, episode_counter)
-        # TODO build the new one based on outperforming one.
 
     def finish_processes(self):
         for p in self.ps:
             p.join()
 
     def is_model_underperforming(self, scores, worker_id):
-        if self.flags.exploration_threshold_metric == "20_percent_top_and_bottom":
-            return self.exploration_20_percent_metric(scores, worker_id)
+        if self.flags.exploitation_threshold_metric == "20_percent_top_and_bottom":
+            return self.exploitation_20_percent_metric(scores, worker_id)
         else: # Add other metrics if desired.
             return False, -1
 
-    def exploration_20_percent_metric(self, scores, worker_id):
+    def exploitation_20_percent_metric(self, scores, worker_id):
+        if not self.is_exploitation_worth(scores[worker_id], np.argmax(scores), self.flags.exploitation_worth_percentage):
+            return False, -1
         threshold_modifier = 5.0                # 20% means roughly every fifth model
         if len(scores) <= threshold_modifier:   # If there are 5 or less models, it is straightforward
             if worker_id == np.argmin(scores):
@@ -165,6 +167,10 @@ class PBT:
                 return True, candidates[np.random.randint(0, threshold - 1)]
             else:
                 return False, -1
+
+    @staticmethod
+    def is_exploitation_worth(worker_score, max_score, min_percent_difference):
+        return (max_score * (1 - min_percent_difference)) > worker_score
 
     @staticmethod
     def get_best_performing_candidates(scores, threshold):

@@ -16,7 +16,7 @@ class Config:
         flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap feature layers.")
         flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
         flags.DEFINE_integer("n_models", 2, "Number of models being trained in parallel by PBT.")
-        flags.DEFINE_integer("n_envs_per_model", 4, "Number of environments to run in parallel per model.")
+        flags.DEFINE_integer("n_envs_per_model", 1, "Number of environments to run in parallel per model.")
         flags.DEFINE_integer("n_steps_per_batch", 8,
                              "Number of steps per batch.")
         flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
@@ -67,8 +67,12 @@ class Config:
         flags.DEFINE_float("max_entropy_weight_action", 1e-2, "entropy of action-id distribution loss weight")
 
 # Exploration related variables
-        flags.DEFINE_enum("exploration_threshold_metric", "20_percent_top_and_bottom", ["20_percent_top_and_bottom", "Nothing"],
+        flags.DEFINE_enum("exploitation_threshold_metric", "20_percent_top_and_bottom", ["20_percent_top_and_bottom", "Nothing"],
                           "What is the threshold for underperforming model recognition.")
+        flags.DEFINE_integer("exploitation_worth_percentage", 0.10,
+                          "The best model has to outperform the current one by 'exploitation_worth_percentage'"
+                          " percent to consider replacing it.")
+
 
     def set_paths(self):
         FLAGS = flags.FLAGS
