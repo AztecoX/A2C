@@ -3,10 +3,12 @@ import numpy as np
 from baselines.PBT.Worker import Worker
 from baselines.common.multienv import SubprocVecEnv, make_sc2env
 from functools import partial
+from time import sleep
 
 
 class PBT:
     def __init__(self, flags, config):
+        self.GPU_allocation_time_in_seconds = 5
         self.ps = self.remotes = self.work_remotes = []
         self.flags = flags
         self.config = config
@@ -63,6 +65,7 @@ class PBT:
                            args=worker_args))
 
         self.ps = tuple(ps)
+        sleep(self.GPU_allocation_time_in_seconds)  # Give the process enough time to allocate GPU resources.
 
     def set_up_processes(self):
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(self.flags.n_models)])
@@ -77,6 +80,8 @@ class PBT:
 
             self.ps.append(Process(target=Worker,
                                    args=worker_args))
+            sleep(self.GPU_allocation_time_in_seconds) # Give the process enough time to allocate GPU resources.
+
         return self.remotes, self.ps
 
     def initialize_workers(self):
