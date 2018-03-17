@@ -33,4 +33,6 @@ src
 
 MUJOCO_LOG.TXT
 
+config.py
+
 baselines/a2c/_files
