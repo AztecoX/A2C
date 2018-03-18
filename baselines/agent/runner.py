@@ -1,6 +1,5 @@
 import numpy as np
 import sys
-from baselines.a2c.a2c import ActorCriticAgent
 from baselines.common.preprocess import ObsProcesser, ActionProcesser, FEATURE_KEYS
 from baselines.common.utils import general_n_step_advantage, combine_first_dimensions
 import tensorflow as tf
@@ -9,14 +8,10 @@ from absl import flags
 class Runner(object):
     def __init__(
             self,
-            envs,
-            agent: ActorCriticAgent,
             n_steps=5,
             discount=0.99,
             checkpoint_path=""
     ):
-        self.envs = envs
-        self.agent = agent
         self.obs_processer = ObsProcesser()
         self.action_processer = ActionProcesser(dim=flags.FLAGS.resolution)
         self.n_steps = n_steps
@@ -26,14 +21,14 @@ class Runner(object):
         self.checkpoint_path=checkpoint_path
         self.accumulated_score = 0
 
-    def reset(self):
-        obs = self.envs.reset()
+    def reset(self, envs):
+        obs = envs.reset()
         self.latest_obs = self.obs_processer.process(obs)
 
-    def _log_score_to_tb(self, score):
+    def _log_score_to_tb(self, score, agent):
         summary = tf.Summary()
         summary.value.add(tag='sc2/episode_score', simple_value=score)
-        self.agent.summary_writer.add_summary(summary, self.episode_counter)
+        agent.summary_writer.add_summary(summary, self.episode_counter)
 
     def _handle_episode_end(self, model_id, timestep):
         score = timestep.observation["score_cumulative"][0]
@@ -47,34 +42,34 @@ class Runner(object):
         self.accumulated_score = 0
         return score
 
-    def run_batch(self):
+    def run_batch(self, envs, agent):
         # init
         mb_actions = []
         mb_obs = []
-        mb_values = np.zeros((self.envs.n_envs, self.n_steps + 1), dtype=np.float32)
-        mb_rewards = np.zeros((self.envs.n_envs, self.n_steps), dtype=np.float32)
+        mb_values = np.zeros((envs.n_envs, self.n_steps + 1), dtype=np.float32)
+        mb_rewards = np.zeros((envs.n_envs, self.n_steps), dtype=np.float32)
 
         latest_obs = self.latest_obs
 
         for n in range(self.n_steps):
             # could calculate value estimate from obs when do training
             # but saving values here will make n step reward calculation a bit easier
-            action_ids, spatial_action_2ds, value_estimate = self.agent.step(latest_obs)
+            action_ids, spatial_action_2ds, value_estimate = agent.step(latest_obs)
 
             mb_values[:, n] = value_estimate
             mb_obs.append(latest_obs)
             mb_actions.append((action_ids, spatial_action_2ds))
 
             actions_pp = self.action_processer.process(action_ids, spatial_action_2ds)
-            obs_raw = self.envs.step(actions_pp)
+            obs_raw = envs.step(actions_pp)
             latest_obs = self.obs_processer.process(obs_raw)
             mb_rewards[:, n] = [t.reward for t in obs_raw]
 
             for t in obs_raw:
                 if t.last():
-                    self._handle_episode_end(self.agent.id, t)
+                    self._handle_episode_end(agent.id, t)
 
-        mb_values[:, -1] = self.agent.get_value(latest_obs)
+        mb_values[:, -1] = agent.get_value_estimate(latest_obs)
 
         n_step_advantage = general_n_step_advantage(
             mb_rewards,
@@ -99,5 +94,3 @@ class Runner(object):
 
         return full_input
 
-    def update_agent(self, agent):
-        self.agent = agent

@@ -5,7 +5,7 @@ import tensorflow as tf
 from pysc2.lib import actions
 from tensorflow.contrib import layers
 from tensorflow.contrib.layers.python.layers.optimizers import OPTIMIZER_SUMMARIES
-from baselines.a2c.policy import FullyConvPolicy
+from baselines.agent.policy import FullyConvPolicy
 from baselines.common.preprocess import ObsProcesser, FEATURE_KEYS, AgentInputTuple
 from baselines.common.utils import weighted_random_sample, select_from_each_row, ravel_index_pairs
 
@@ -57,14 +57,14 @@ class ActorCriticAgent:
         https://arxiv.org/pdf/1708.04782.pdf
         https://github.com/deepmind/pysc2
         Can use
-        - A2C https://blog.openai.com/baselines-acktr-a2c/ (synchronous version of A3C)
+        - A2C https://blog.openai.com/baselines-acktr-agent/ (synchronous version of A3C)
         :param summary_path: tensorflow summaries will be created here
         :param all_summary_freq: how often save all summaries
         :param scalar_summary_freq: int, how often save scalar summaries
         :param spatial_dim: dimension for both minimap and screen
-        :param loss_value_weight: value weight for a2c update
-        :param entropy_weight_spatial: spatial entropy weight for a2c update
-        :param entropy_weight_action_id: action selection entropy weight for a2c update
+        :param loss_value_weight: value weight for agent update
+        :param entropy_weight_spatial: spatial entropy weight for agent update
+        :param entropy_weight_action_id: action selection entropy weight for agent update
         :param max_gradient_norm: global max norm for gradients, if None then not limited
         :param optimiser: see valid choices below
         :param optimiser_pars: optional parameters to pass in optimiser
@@ -242,7 +242,7 @@ class ActorCriticAgent:
 
         self.train_step += 1
 
-    def get_value(self, obs):
+    def get_value_estimate(self, obs):
         feed_dict = self._input_to_feed_dict(obs)
         return self.sess.run(self.value_estimate, feed_dict=feed_dict)
 

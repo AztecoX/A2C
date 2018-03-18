@@ -1,7 +1,7 @@
 from multiprocessing import Process, Pipe, Lock, connection
 import numpy as np
 from baselines.PBT.Worker import Worker
-from baselines.common.multienv import SubprocVecEnv, make_sc2env
+from baselines.common.multienv import EnvGroup, make_sc2env
 from functools import partial
 from time import sleep
 
@@ -9,7 +9,7 @@ from time import sleep
 class PBT:
     def __init__(self, flags, config):
         self.GPU_allocation_time_in_seconds = 5
-        self.ps = self.remotes = self.work_remotes = []
+        self.processes = self.remotes = self.worker_remotes = []
         self.flags = flags
         self.config = config
         self.lock = Lock() # lock for .ckpt models file access
@@ -29,68 +29,42 @@ class PBT:
     def build_envs(self, env_args):
         env_groups = []
         for i in range(self.flags.n_models):
-            env_groups.append(SubprocVecEnv((partial(make_sc2env, **env_args),)
-                                  * self.flags.n_envs_per_model))
+            env_groups.append(EnvGroup((partial(make_sc2env, **env_args),)
+                                       * self.flags.n_envs_per_model))
         return env_groups
 
-    def reset_process(self, id_assigned, id_outperforming, step_counter=0):
-        remote, work_remote = Pipe()
-
-        ps = list(self.ps)
-        remotes = list(self.remotes)
-        work_remotes = list(self.work_remotes)
-
-        del ps[id_assigned]
-        del remotes[id_assigned]
-        del work_remotes[id_assigned]
-
-        remotes.insert(id_assigned, remote)
-        work_remotes.insert(id_assigned, work_remote)
-
-        self.remotes = tuple(remotes)
-        self.work_remotes = tuple(work_remotes)
-
-        worker_args = (self.work_remotes[id_assigned],
-                       id_assigned,
-                       self.flags,
-                       self.config,
-                       self.lock,
-                       self.env_groups[id_assigned],
-                       True,
-                       id_outperforming,
-                       step_counter
-                       )
-
-        ps.insert(id_assigned, Process(target=Worker,
-                           args=worker_args))
-
-        self.ps = tuple(ps)
-        sleep(self.GPU_allocation_time_in_seconds)  # Give the process enough time to allocate GPU resources.
-
-    def set_up_processes(self):
-        self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(self.flags.n_models)])
+    def set_up_worker_processes(self):
+        self.remotes, self.worker_remotes = zip(*[Pipe() for _ in range(self.flags.n_models)])
 
         for n in range(self.flags.n_models):
-            worker_args = (self.work_remotes[n],
+            worker_args = (self.worker_remotes[n],
                            n,
                            self.flags,
                            self.config,
                            self.lock,
                            self.env_groups[n])
 
-            self.ps.append(Process(target=Worker,
-                                   args=worker_args))
+            self.processes.append(Process(target=Worker,
+                                          args=worker_args))
             sleep(self.GPU_allocation_time_in_seconds) # Give the process enough time to allocate GPU resources.
 
-        return self.remotes, self.ps
+        return self.remotes, self.processes
 
-    def initialize_workers(self):
-        for p in self.ps:
+    def start_worker_processes(self):
+        for p in self.processes:
             p.start()
 
     def run_workers(self):
         for r in self.remotes:
             r.send(('begin', 0, 0))
+
+    def stop_workers(self):
+        for r in self.remotes:
+            r.send(('close', None, None))
+
+    def finish_worker_processes(self):
+        for p in self.processes:
+            p.join()
 
     def handle_requests(self):
         scores = np.zeros(self.flags.n_models, dtype=int)
@@ -115,26 +89,52 @@ class PBT:
                         # release GPU resources correctly on process exit.
                         self.restart_process(worker_id, np.argmax(scores), arg, step_counter)
                     elif msg == 'done':
-                        self.finish_processes()
-
-    def stop_workers(self):
-        for r in self.remotes:
-            r.send(('close', None, None))
+                        self.finish_worker_processes()
 
     def start_process(self, outperformed_id, episode_counter=0):
-        self.ps[outperformed_id].start()
+        self.processes[outperformed_id].start()
         self.remotes[outperformed_id].send(('begin', episode_counter, 0))
 
     def restart_process(self, outperformed_id, outperforming_id, episode_counter, step_counter):
-        self.ps[outperformed_id].join()
+        self.processes[outperformed_id].join()
 
         self.reset_process(outperformed_id, outperforming_id, step_counter)
 
         self.start_process(outperformed_id, episode_counter)
 
-    def finish_processes(self):
-        for p in self.ps:
-            p.join()
+    def reset_process(self, id_assigned, id_outperforming, step_counter=0):
+        remote, work_remote = Pipe()
+
+        ps = list(self.processes)
+        remotes = list(self.remotes)
+        work_remotes = list(self.worker_remotes)
+
+        del ps[id_assigned]
+        del remotes[id_assigned]
+        del work_remotes[id_assigned]
+
+        remotes.insert(id_assigned, remote)
+        work_remotes.insert(id_assigned, work_remote)
+
+        self.remotes = tuple(remotes)
+        self.worker_remotes = tuple(work_remotes)
+
+        worker_args = (self.worker_remotes[id_assigned],
+                       id_assigned,
+                       self.flags,
+                       self.config,
+                       self.lock,
+                       self.env_groups[id_assigned],
+                       True,
+                       id_outperforming,
+                       step_counter
+                       )
+
+        ps.insert(id_assigned, Process(target=Worker,
+                           args=worker_args))
+
+        self.processes = tuple(ps)
+        sleep(self.GPU_allocation_time_in_seconds)  # Give the process enough time to allocate GPU resources.
 
     def is_model_underperforming(self, scores, worker_id):
         if self.flags.exploitation_threshold_metric == "20_percent_top_and_bottom":

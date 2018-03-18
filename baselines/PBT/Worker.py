@@ -4,9 +4,8 @@ import tensorflow as tf
 from datetime import datetime
 from functools import partial
 
-from baselines.a2c.a2c import ActorCriticAgent
-from baselines.a2c.runner import Runner
-from baselines.common.multienv import SubprocVecEnv, make_sc2env, SingleEnv
+from baselines.agent.agent import ActorCriticAgent
+from baselines.agent.runner import Runner
 
 
 class Worker:
@@ -29,7 +28,7 @@ class Worker:
         self.lock = lock
         self.config = config
         self.flags = flags
-        self.batches_per_pbt_eval = flags.K_batches_per_eval * 1000
+        self.batches_per_eval = flags.K_batches_per_eval * 1000
         self.envs = envs
         self.agent = self.runner = None
         self.step_counter = 0
@@ -37,8 +36,6 @@ class Worker:
 
         self.global_step_tensor = tf.Variable(step_counter, trainable=False, name="global_step")
         self.session = tf.Session(config=self.config.tf_config)
-        # Get the Worker unit ready for work.
-#        self.build_envs(Worker.prepare_env_args(self.flags), self.flags.n_envs_per_model)
 
         # An object for saving and restoring models from storage.
         self.saver = None
@@ -57,22 +54,7 @@ class Worker:
         else:
             remote.close()
 
-    @staticmethod
-    def prepare_env_args(flags):
-        return dict(
-            map_name=flags.map_name,
-            step_mul=flags.step_mul,
-            game_steps_per_episode=0,
-            screen_size_px=(flags.resolution,) * 2,
-            minimap_size_px=(flags.resolution,) * 2,
-            visualize=flags.visualize
-        )
-
-    def build_envs(self, env_args, envs_per_model):
-        self.envs = SubprocVecEnv((partial(make_sc2env, **env_args),) * envs_per_model)
-        # return SingleEnv(make_sc2env(**env_args))
-
-    def build_agent(self, rebuilding=False, outperforming_id=0, step_counter=0):
+    def build_agent(self, rebuilding=False, outperforming_model_id=0, step_counter=0):
         # Set up the agent structure.
         self.agent = ActorCriticAgent(
             session=self.session,
@@ -101,7 +83,7 @@ class Worker:
         # TODO differentiate loaded models?
         # TODO also, maybe init is needed to call only once for all agents!
         if rebuilding:
-            self.agent.load(self.config.full_checkpoint_path, outperforming_id, self.lock, self.saver)
+            self.agent.load(self.config.full_checkpoint_path, outperforming_model_id, self.lock, self.saver)
 
             initial_global_step = tf.assign(tf.train.get_global_step(), prev_global_step)
             print("initial_global_step: %s" % initial_global_step)
@@ -137,14 +119,12 @@ class Worker:
     def build_runner(self, flags, config):
 
         self.runner = Runner(
-            envs=self.envs,
-            agent=self.agent,
             discount=self.discount,
             n_steps=flags.n_steps_per_batch,
             checkpoint_path=config.full_checkpoint_path
         )
 
-        self.runner.reset()
+        self.runner.reset(self.envs)
 
         return self.runner
 
@@ -176,7 +156,7 @@ class Worker:
                     if i % 1000 == 0:
                         Worker._print(i)
 
-                    training_input = self.runner.run_batch()  # run
+                    training_input = self.runner.run_batch(self.envs, self.agent)  # run
 
                     if flags.training:
                         self.agent.train(training_input)  # train
@@ -185,7 +165,7 @@ class Worker:
 
                     i += 1
 
-                    if i % self.batches_per_pbt_eval == 0:
+                    if i % self.batches_per_eval == 0:
                         done = self.evaluate_and_update_model(i)
 
                     if 0 <= n_batches <= i or done:
@@ -200,7 +180,6 @@ class Worker:
 
     def load_better_model(self, step_counter):
         self.remote.send(('yield', self.id, self.runner.episode_counter, step_counter))
-        self.remote.close()
 
     def evaluate_and_update_model(self, step_counter):
         # Evaluating...
