@@ -30,7 +30,7 @@ class PBT:
         env_groups = []
         for i in range(self.flags.n_models):
             env_groups.append(EnvGroup((partial(make_sc2env, **env_args),)
-                                       * self.flags.n_envs_per_model))
+                                       * self.flags.n_envs_per_model, i))
         return env_groups
 
     def set_up_worker_processes(self):
@@ -45,7 +45,7 @@ class PBT:
                            self.env_groups[n])
 
             self.processes.append(Process(target=Worker,
-                                          args=worker_args))
+                                          args=worker_args, name="Worker-process-" + str(n)))
             sleep(self.GPU_allocation_time_in_seconds) # Give the process enough time to allocate GPU resources.
 
         return self.remotes, self.processes

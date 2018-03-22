@@ -74,13 +74,17 @@ class CloudpickleWrapper(object):
 
 
 class EnvGroup:
-    def __init__(self, env_fns):
+    def __init__(self, env_fns, env_group_id):
         n_envs = len(env_fns)
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(n_envs)])
         self.ps = [Process(target=worker, args=(work_remote, CloudpickleWrapper(env_fn)))
             for (work_remote, env_fn) in zip(self.work_remotes, env_fns)]
+
+        env_id = 0
         for p in self.ps:
+            p.name = "EnvGroup-" + str(env_group_id) + "-Environment-" + str(env_id)
             p.start()
+            env_id += 1
 
         self.n_envs = n_envs
 
