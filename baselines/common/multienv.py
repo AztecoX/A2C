@@ -4,7 +4,7 @@ from pysc2.env import sc2_env, available_actions_printer
 
 class SingleEnv:
     """
-    This works like SubprocVecEnv but runs only one environment in the main process
+    This works like EnvGroup but runs only one environment in the main process
     """
     def __init__(self, env):
         self.env = env
@@ -29,7 +29,7 @@ class SingleEnv:
         self.env.close()
 
 
-# below (worker, CloudpickleWrapper, SubprocVecEnv) copied from
+# below (worker, CloudpickleWrapper, EnvGroup) copied from
 # https://github.com/openai/baselines/blob/master/baselines/common/vec_env/subproc_vec_env.py
 # with some sc2 specific modifications
 def worker(remote, env_fn_wrapper):
@@ -73,7 +73,7 @@ class CloudpickleWrapper(object):
         self.x = pickle.loads(ob)
 
 
-class SubprocVecEnv:
+class EnvGroup:
     def __init__(self, env_fns):
         n_envs = len(env_fns)
         self.remotes, self.work_remotes = zip(*[Pipe() for _ in range(n_envs)])

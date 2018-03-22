@@ -94,5 +94,5 @@ class Config:
         # other. In that case it could be possible, that when replacing a less memory
         # demanding model with a more demanding one, we could run out of memory. I did not
         # make a better workaround yet.
-        # self.tf_config.gpu_options.allow_growth = True
-        self.tf_config.gpu_options.per_process_gpu_memory_fraction = 0.80 / FLAGS.n_models
+#        self.tf_config.gpu_options.allow_growth = True
+        self.tf_config.gpu_options.per_process_gpu_memory_fraction = 0.70 / FLAGS.n_models

@@ -9,8 +9,8 @@ class PBTManager:
         self.pbt = PBT(flags, config)
 
     def set_up_processes(self):
-        self.pbt.set_up_processes()
-        self.pbt.initialize_workers()
+        self.pbt.set_up_worker_processes()
+        self.pbt.start_worker_processes()
 
     def start_running(self):
         self.pbt.run_workers()
@@ -20,9 +20,9 @@ class PBTManager:
 
     def stop_running(self):
         self.pbt.stop_workers()
-        self.pbt.finish_processes()
+        self.pbt.finish_worker_processes()
 
     def wait_for_finish(self):
-        self.pbt.finish_processes()
+        self.pbt.finish_worker_processes()
         print("Okay.")
 
