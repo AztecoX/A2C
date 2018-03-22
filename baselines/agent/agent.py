@@ -263,6 +263,7 @@ class ActorCriticAgent:
         tf.train.export_meta_graph(filename=path + '/model' + str(self.id) + '.meta')
         saver.save(self.sess, path + '/model' + str(self.id) + '.ckpt')
         lock.release()
+        print("done saving model %s." % (str(self.id)))
 
     def load(self, path, model_id, lock, saver):
         print("loading a more successful model" + str(model_id) + " instead of model" + str(self.id))

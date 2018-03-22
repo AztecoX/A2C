@@ -16,7 +16,7 @@ class Config:
         flags.DEFINE_integer("resolution", 32, "Resolution for screen and minimap feature layers.")
         flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
         flags.DEFINE_integer("n_models", 2, "Number of models being trained in parallel by PBT.")
-        flags.DEFINE_integer("n_envs_per_model", 1, "Number of environments to run in parallel per model.")
+        flags.DEFINE_integer("n_envs_per_model", 4, "Number of environments to run in parallel per model.")
         flags.DEFINE_integer("n_steps_per_batch", 8,
                              "Number of steps per batch.")
         flags.DEFINE_integer("all_summary_freq", 50, "Record all summaries every n batch")
@@ -95,4 +95,4 @@ class Config:
         # demanding model with a more demanding one, we could run out of memory. I did not
         # make a better workaround yet.
 #        self.tf_config.gpu_options.allow_growth = True
-        self.tf_config.gpu_options.per_process_gpu_memory_fraction = 0.70 / FLAGS.n_models
+        self.tf_config.gpu_options.per_process_gpu_memory_fraction = 0.60 / FLAGS.n_models
