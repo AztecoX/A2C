@@ -143,11 +143,6 @@ class Worker:
         i = self.step_counter
         done = False
 
-        if flags.K_batches >= 0:
-            n_batches = flags.K_batches * 1000
-        else:
-            n_batches = -1
-
         try:
             while True:
                 if cmd == 'close':
@@ -168,7 +163,7 @@ class Worker:
                     if i % self.batches_per_eval == 0:
                         done = self.evaluate_and_update_model(i)
 
-                    if 0 <= n_batches <= i or done:
+                    if 0 <= flags.episodes <= self.runner.episode_counter or done:
                         break
 
         except KeyboardInterrupt:

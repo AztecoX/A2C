@@ -46,13 +46,15 @@ class PBT:
 
             self.processes.append(Process(target=Worker,
                                           args=worker_args, name="Worker-process-" + str(n)))
-            sleep(self.GPU_allocation_time_in_seconds) # Give the process enough time to allocate GPU resources.
 
         return self.remotes, self.processes
 
     def start_worker_processes(self):
         for p in self.processes:
+            print("BEFORE SLEEPING")
             p.start()
+            sleep(self.GPU_allocation_time_in_seconds) # Give the process enough time to allocate GPU resources.
+            print("AFTER SLEEPING")
 
     def run_workers(self):
         for r in self.remotes:
