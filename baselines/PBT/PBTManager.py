@@ -24,5 +24,4 @@ class PBTManager:
 
     def wait_for_finish(self):
         self.pbt.finish_worker_processes()
-        print("Okay.")
 

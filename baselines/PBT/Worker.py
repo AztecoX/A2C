@@ -170,7 +170,7 @@ class Worker:
             pass
 
         if not done:
-            self.remote.send(('done', None, None, None))
+            self.remote.send(('done', self.id, None, None))
         self.remote.close()
 
     def load_better_model(self, step_counter):

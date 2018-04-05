@@ -64,13 +64,20 @@ class PBT:
         for r in self.remotes:
             r.send(('close', None, None))
 
+    def finish_worker_process(self, worker_id):
+        self.env_groups[worker_id].close()
+        self.processes[worker_id].join()
+
     def finish_worker_processes(self):
         for p in self.processes:
             p.join()
 
     def handle_requests(self):
+        workers_done = 0;
         scores = np.zeros(self.flags.n_models, dtype=int)
         while True:
+            if workers_done == self.flags.n_models:
+                return
             # Master checks for Worker requests and resolves them.
             requests = connection.wait(self.remotes, timeout=5)
             if len(requests) != 0:
@@ -91,7 +98,8 @@ class PBT:
                         # release GPU resources correctly on process exit.
                         self.restart_process(worker_id, np.argmax(scores), arg, step_counter)
                     elif msg == 'done':
-                        self.finish_worker_processes()
+                        self.finish_worker_process(worker_id)
+                        workers_done = workers_done + 1
 
     def start_process(self, outperformed_id, episode_counter=0):
         self.processes[outperformed_id].start()
