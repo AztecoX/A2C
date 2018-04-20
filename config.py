@@ -28,7 +28,7 @@ class Config:
                              "Number of training batches to run in thousands, use -1 to run forever")
         flags.DEFINE_integer("K_batches_per_eval", 10,
                              "Number of training batches to run in thousands before PBT evaluates model")
-        flags.DEFINE_string("map_name", "CollectMineralShards", "Name of a map to use.")
+        flags.DEFINE_string("map_name", "FindAndDefeatZerglings", "Name of a map to use.")
         flags.DEFINE_boolean("training", True,
                              "if should train the model, if false then save only episode score summaries"
                              )

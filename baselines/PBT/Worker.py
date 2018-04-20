@@ -79,9 +79,6 @@ class Worker:
         # An object for saving and restoring models from storage.
         self.saver = tf.train.Saver()
 
-        # TODO this loads last checkpoint model...explore new hyperparameters to
-        # TODO differentiate loaded models?
-        # TODO also, maybe init is needed to call only once for all agents!
         if rebuilding:
             self.agent.load(self.config.full_checkpoint_path, outperforming_model_id, self.lock, self.saver)
 

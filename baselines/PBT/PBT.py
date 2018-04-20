@@ -153,7 +153,7 @@ class PBT:
             return False, -1
 
     def exploitation_20_percent_metric(self, scores, worker_id):
-        if not self.is_exploitation_worth(scores[worker_id], np.argmax(scores), self.flags.exploitation_worth_percentage):
+        if not self.is_exploitation_worth(scores[worker_id], np.amax(scores), self.flags.exploitation_worth_percentage):
             return False, -1
         threshold_modifier = 5.0                # 20% means roughly every fifth model
         if len(scores) <= threshold_modifier:   # If there are 5 or less models, it is straightforward
@@ -164,7 +164,7 @@ class PBT:
         else:
             counter = 0
             comparison_counter = 0
-            # Threshold decides how many models fit into the top and bottom 20% category.
+            # Threshold decides how many models fit into the bottom 20% category.
             threshold = int(np.ceil(len(scores) / threshold_modifier))
             while counter < len(scores):
                 if (scores[counter] < scores[worker_id]) and (worker_id != counter):
@@ -174,12 +174,14 @@ class PBT:
             if comparison_counter < threshold:
                 # It has been determined, that the model will be replaced.
                 # Now it has to be decided, which one will replace it.
-
+                top_threshold = int(np.ceil(threshold / 2))
                 # Getting the best performing candidates...
-                candidates = self.get_best_performing_candidates(scores, threshold)
-
+                candidates = self.get_best_performing_candidates(scores, top_threshold) #TODO adjust code to reflect the division by two!
                 # Choosing one of them at random:
-                return True, candidates[np.random.randint(0, threshold - 1)]
+                if top_threshold == 1:
+                    return True, candidates[0]
+                else:
+                    return True, candidates[np.random.randint(0, top_threshold - 1)]
             else:
                 return False, -1
 
@@ -191,7 +193,7 @@ class PBT:
     def get_best_performing_candidates(scores, threshold):
         candidates = []
         sc = list(scores)
-        for i in range(threshold - 1):
+        for i in range(threshold):
             x = np.argmax(sc)
             candidates.append(x)
             sc[x] = -1
