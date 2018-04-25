@@ -88,6 +88,8 @@ class Worker:
             print("GLOBAL STEP AFTER: %s" % self.session.run(tf.train.get_global_step()))
 #            tf.train.global_step.assign(self.sess, self.global_step_tensor))
             self.agent.update_train_step(step_counter)
+            var = [v for v in tf.trainable_variables() if v.name == "theta/spatial_action/weights:0"][0][0][0][0][0]
+            print("REBUILT MODEL " + str(self.id) + ", BASED ON MODEL " + str(outperforming_model_id) + ", WEIGHT VALUE: " + str(self.session.run(var)))
         elif os.path.exists(self.config.full_checkpoint_path):
             self.agent.load_default(self.config.full_checkpoint_path)
         else:

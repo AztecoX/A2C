@@ -73,7 +73,7 @@ class PBT:
             p.join()
 
     def handle_requests(self):
-        workers_done = 0;
+        workers_done = 0
         scores = np.zeros(self.flags.n_models, dtype=int)
         while True:
             if workers_done == self.flags.n_models:
@@ -174,7 +174,7 @@ class PBT:
             if comparison_counter < threshold:
                 # It has been determined, that the model will be replaced.
                 # Now it has to be decided, which one will replace it.
-                top_threshold = int(np.ceil(threshold / 2))
+                top_threshold = int(np.ceil(threshold / 2.0))
                 # Getting the best performing candidates...
                 candidates = self.get_best_performing_candidates(scores, top_threshold) #TODO adjust code to reflect the division by two!
                 # Choosing one of them at random:

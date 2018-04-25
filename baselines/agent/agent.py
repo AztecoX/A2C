@@ -260,6 +260,8 @@ class ActorCriticAgent:
         step = step or self.train_step
         print("saving model to %s" % (path + '/model' + str(self.id) + '.ckpt'))
         lock.acquire()
+        var = [v for v in tf.trainable_variables() if v.name == "theta/spatial_action/weights:0"][0][0][0][0][0]
+        print("SAVING MODEL " + str(self.id) + ", WEIGHT VALUE: " + str(self.sess.run(var)))
         tf.train.export_meta_graph(filename=path + '/model' + str(self.id) + '.meta')
         saver.save(self.sess, path + '/model' + str(self.id) + '.ckpt')
         lock.release()
