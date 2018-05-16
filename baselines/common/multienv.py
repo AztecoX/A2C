@@ -113,5 +113,4 @@ class EnvGroup:
 
 def make_sc2env(**kwargs):
     env = sc2_env.SC2Env(**kwargs)
-    # env = available_actions_printer.AvailableActionsPrinter(env)
     return env

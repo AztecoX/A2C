@@ -7,8 +7,9 @@ from tensorflow.contrib import layers
 
 class FullyConvPolicy:
     """
-    FullyConv network structure from https://arxiv.org/pdf/1708.04782.pdf
-    Some implementation ideas are borrowed from https://github.com/xhujoy/pysc2-agents
+    Most of the functionality regarding the FullyConv policy was implemented by Pekka Aalto's repository
+    (https://github.com/pekaalto/sc2aibot) and is used here, since the policy implementation is not the
+    main point of this work.
     """
 
     def __init__(self,

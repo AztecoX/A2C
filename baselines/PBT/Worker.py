@@ -137,33 +137,29 @@ class Worker:
     def work(self, flags):
         print("Agent n." + str(self.id) + " reporting for duty!", flush=True)
         self.agent.save(self.runner.checkpoint_path, self.lock, self.saver)
-        cmd = ""
-        action = ""
+
         i = self.step_counter
         done = False
 
         try:
             while True:
-                if cmd == 'close':
-                    break
+                if i % 1000 == 0:
+                    Worker._print(i)
+
+                training_input = self.runner.run_batch(self.envs, self.agent)  # run
+
+                if flags.training:
+                    self.agent.train(training_input)  # train
                 else:
-                    if i % 1000 == 0:
-                        Worker._print(i)
+                    pass
 
-                    training_input = self.runner.run_batch(self.envs, self.agent)  # run
+                i += 1
 
-                    if flags.training:
-                        self.agent.train(training_input)  # train
-                    else:
-                        pass
+                if i % self.batches_per_eval == 0:
+                    done = self.evaluate_and_update_model(i)
 
-                    i += 1
-
-                    if i % self.batches_per_eval == 0:
-                        done = self.evaluate_and_update_model(i)
-
-                    if 0 <= flags.episodes <= self.runner.episode_counter or done:
-                        break
+                if 0 <= flags.episodes <= self.runner.episode_counter or done:
+                    break
 
         except KeyboardInterrupt:
             pass
@@ -183,7 +179,6 @@ class Worker:
         cmd, arg, _ = self.remote.recv()
 
         # Updating...
-
         if cmd == 'restore':
             self.load_better_model(step_counter)
             return True

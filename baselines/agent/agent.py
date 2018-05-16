@@ -52,24 +52,6 @@ class ActorCriticAgent:
                  optimiser_pars: dict = None,
                  policy=FullyConvPolicy
                  ):
-        """
-        Actor-Critic Agent for learning pysc2-minigames
-        https://arxiv.org/pdf/1708.04782.pdf
-        https://github.com/deepmind/pysc2
-        Can use
-        - A2C https://blog.openai.com/baselines-acktr-agent/ (synchronous version of A3C)
-        :param summary_path: tensorflow summaries will be created here
-        :param all_summary_freq: how often save all summaries
-        :param scalar_summary_freq: int, how often save scalar summaries
-        :param spatial_dim: dimension for both minimap and screen
-        :param loss_value_weight: value weight for agent update
-        :param entropy_weight_spatial: spatial entropy weight for agent update
-        :param entropy_weight_action_id: action selection entropy weight for agent update
-        :param max_gradient_norm: global max norm for gradients, if None then not limited
-        :param optimiser: see valid choices below
-        :param optimiser_pars: optional parameters to pass in optimiser
-        :param policy: Policy class
-        """
 
         assert optimiser in ["adam", "rmsprop"]
         self.sess = session

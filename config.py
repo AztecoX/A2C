@@ -36,7 +36,7 @@ class Config:
                           "What to do if summary and model output exists, only for training, is ignored if notraining")
 
         # The following parameters are considering a potential randomization.
-        flags.DEFINE_boolean("randomize_hyperparams", True, "Without randomization, using PBT does not make much sense.")
+        flags.DEFINE_boolean("randomize_hyperparams", True, "Without randomization, using PBT would not be very effective.")
 
         flags.DEFINE_float("max_gradient_norm", 500.0, "good value might depend on the environment")
         flags.DEFINE_float("min_max_gradient_norm", 150.0, "good value might depend on the environment")
@@ -67,7 +67,7 @@ class Config:
         flags.DEFINE_float("max_entropy_weight_action", 1e-2, "entropy of action-id distribution loss weight")
 
 # Exploration related variables
-        flags.DEFINE_enum("exploitation_threshold_metric", "20_percent_top_and_bottom", ["20_percent_top_and_bottom", "Nothing"],
+        flags.DEFINE_enum("exploitation_threshold_metric", "Bottom_20_percent", ["Bottom_20_percent", "Nothing"],
                           "What is the threshold for underperforming model recognition.")
         flags.DEFINE_float("exploitation_worth_percentage", 0.10,
                           "The best model has to outperform the current one by 'exploitation_worth_percentage'"

@@ -51,10 +51,8 @@ class PBT:
 
     def start_worker_processes(self):
         for p in self.processes:
-            print("BEFORE SLEEPING")
             p.start()
             sleep(self.GPU_allocation_time_in_seconds) # Give the process enough time to allocate GPU resources.
-            print("AFTER SLEEPING")
 
     def run_workers(self):
         for r in self.remotes:
@@ -147,7 +145,7 @@ class PBT:
         sleep(self.GPU_allocation_time_in_seconds)  # Give the process enough time to allocate GPU resources.
 
     def is_model_underperforming(self, scores, worker_id):
-        if self.flags.exploitation_threshold_metric == "20_percent_top_and_bottom":
+        if self.flags.exploitation_threshold_metric == "Bottom_20_percent":
             return self.exploitation_20_percent_metric(scores, worker_id)
         else: # Add other metrics if desired.
             return False, -1
@@ -176,7 +174,7 @@ class PBT:
                 # Now it has to be decided, which one will replace it.
                 top_threshold = int(np.ceil(threshold / 2.0))
                 # Getting the best performing candidates...
-                candidates = self.get_best_performing_candidates(scores, top_threshold) #TODO adjust code to reflect the division by two!
+                candidates = self.get_best_performing_candidates(scores, top_threshold)
                 # Choosing one of them at random:
                 if top_threshold == 1:
                     return True, candidates[0]
