@@ -52,8 +52,6 @@ class Runner(object):
         latest_obs = self.latest_obs
 
         for n in range(self.n_steps):
-            # could calculate value estimate from obs when do training
-            # but saving values here will make n step reward calculation a bit easier
             action_ids, spatial_action_2ds, value_estimate = agent.step(latest_obs)
 
             mb_values[:, n] = value_estimate
@@ -62,6 +60,8 @@ class Runner(object):
 
             actions_pp = self.action_processer.process(action_ids, spatial_action_2ds)
             obs_raw = envs.step(actions_pp)
+            if obs_raw[0] == -1:
+                raise KeyboardInterrupt
             latest_obs = self.obs_processer.process(obs_raw)
             mb_rewards[:, n] = [t.reward for t in obs_raw]
 

@@ -239,15 +239,11 @@ class ActorCriticAgent:
 
     def save(self, path, lock, saver, step=0):
         os.makedirs(path, exist_ok=True)
-        step = step or self.train_step
         print("saving model to %s" % (path + '/model' + str(self.id) + '.ckpt'))
         lock.acquire()
-        var = [v for v in tf.trainable_variables() if v.name == "theta/spatial_action/weights:0"][0][0][0][0][0]
-        print("SAVING MODEL " + str(self.id) + ", WEIGHT VALUE: " + str(self.sess.run(var)))
         tf.train.export_meta_graph(filename=path + '/model' + str(self.id) + '.meta')
         saver.save(self.sess, path + '/model' + str(self.id) + '.ckpt')
         lock.release()
-        print("done saving model %s." % (str(self.id)))
 
     def load(self, path, model_id, lock, saver):
         print("loading a more successful model" + str(model_id) + " instead of model" + str(self.id))
@@ -256,8 +252,4 @@ class ActorCriticAgent:
         lock.release()
 
     def load_default(self, path):
-        ckpt = tf.train.get_checkpoint_state(path)
-        self.saver.restore(self.sess, ckpt.model_checkpoint_path)
-        self.train_step = int(ckpt.model_checkpoint_path.split('-')[-1])
-        print("loaded old model with train_step %d" % self.train_step)
-        self.train_step += 1
+        self.saver.restore(self.sess, path)

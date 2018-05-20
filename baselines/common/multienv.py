@@ -39,23 +39,26 @@ def worker(remote, env_fn_wrapper):
     single-player conversions here
     """
     env = env_fn_wrapper.x()
-    while True:
-        cmd, action = remote.recv()
-        if cmd == 'step':
-            timesteps = env.step([action])
-            assert len(timesteps) == 1
-            remote.send(timesteps[0])
-        elif cmd == 'reset':
-            timesteps = env.reset()
-            assert len(timesteps) == 1
-            remote.send(timesteps[0])
-        elif cmd == 'close':
-            remote.close()
-            break
-        else:
-            raise NotImplementedError
 
-
+    try:
+        while True:
+            cmd, action = remote.recv()
+            if cmd == 'step':
+                timesteps = env.step([action])
+                assert len(timesteps) == 1
+                remote.send(timesteps[0])
+            elif cmd == 'reset':
+                timesteps = env.reset()
+                assert len(timesteps) == 1
+                remote.send(timesteps[0])
+            elif cmd == 'close':
+                remote.close()
+                break
+            else:
+                raise NotImplementedError
+    except KeyboardInterrupt:
+        remote.send(-1)
+        remote.close()
 class CloudpickleWrapper(object):
     """
     Uses cloudpickle to serialize contents (otherwise multiprocessing tries to use pickle)
@@ -97,7 +100,6 @@ class EnvGroup:
 
     def step(self, actions):
         return self._step_or_reset("step", actions)
-
     def reset(self):
         return self._step_or_reset("reset", None)
 

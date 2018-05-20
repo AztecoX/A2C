@@ -7,7 +7,7 @@ from tensorflow.contrib import layers
 
 class FullyConvPolicy:
     """
-    Most of the functionality regarding the FullyConv policy was implemented by Pekka Aalto's repository
+    Most of the functionality regarding the FullyConv policy was implemented by Pekka Aalto
     (https://github.com/pekaalto/sc2aibot) and is used here, since the policy implementation is not the
     main point of this work.
     """
@@ -109,8 +109,6 @@ class FullyConvPolicy:
             trainable=self.trainable
         )
 
-        print(fc1)
-
         action_id_probs = layers.fully_connected(
             fc1,
             num_outputs=len(actions.FUNCTIONS),
@@ -147,10 +145,3 @@ class FullyConvPolicy:
         self.action_id_log_probs = action_id_log_probs
         self.spatial_action_log_probs = spatial_action_log_probs
         return self
-
-#    def restore(self):
-#        self.value_estimate = value_estimate
-#        self.action_id_probs = action_id_probs
-#        self.spatial_action_probs = spatial_action_probs
-#        self.action_id_log_probs = action_id_log_probs
-#        self.spatial_action_log_probs = spatial_action_log_probs
