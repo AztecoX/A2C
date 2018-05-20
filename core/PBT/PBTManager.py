@@ -1,4 +1,4 @@
-from baselines.PBT.PBT import PBT
+from core.PBT.PBT import PBT
 
 # PBTManager exposes PBT functionality through an interface.
 # PBT = Population Based Training.

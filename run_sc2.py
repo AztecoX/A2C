@@ -4,7 +4,7 @@ import sys
 sys.path.append('../..')
 from datetime import datetime
 from absl import flags
-from baselines.PBT.PBTManager import PBTManager
+from core.PBT.PBTManager import PBTManager
 
 from config import Config
 

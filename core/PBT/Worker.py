@@ -4,8 +4,8 @@ import tensorflow as tf
 from datetime import datetime
 from functools import partial
 
-from baselines.agent.agent import ActorCriticAgent
-from baselines.agent.runner import Runner
+from core.agent.agent import ActorCriticAgent
+from core.agent.runner import Runner
 
 
 class Worker:

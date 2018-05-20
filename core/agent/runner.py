@@ -1,7 +1,7 @@
 import numpy as np
 import sys
-from baselines.common.preprocess import ObsProcesser, ActionProcesser, FEATURE_KEYS
-from baselines.common.utils import general_n_step_advantage, combine_first_dimensions
+from core.common.preprocess import ObsProcesser, ActionProcesser, FEATURE_KEYS
+from core.common.utils import general_n_step_advantage, combine_first_dimensions
 import tensorflow as tf
 from absl import flags
 

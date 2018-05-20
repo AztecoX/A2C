@@ -1,7 +1,7 @@
 from multiprocessing import Process, Pipe, Lock, connection
 import numpy as np
-from baselines.PBT.Worker import Worker
-from baselines.common.multienv import EnvGroup, make_sc2env
+from core.PBT.Worker import Worker
+from core.common.multienv import EnvGroup, make_sc2env
 from functools import partial
 from time import sleep
 

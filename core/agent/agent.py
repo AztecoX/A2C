@@ -5,9 +5,9 @@ import tensorflow as tf
 from pysc2.lib import actions
 from tensorflow.contrib import layers
 from tensorflow.contrib.layers.python.layers.optimizers import OPTIMIZER_SUMMARIES
-from baselines.agent.policy import FullyConvPolicy
-from baselines.common.preprocess import ObsProcesser, FEATURE_KEYS, AgentInputTuple
-from baselines.common.utils import weighted_random_sample, select_from_each_row, ravel_index_pairs
+from core.agent.policy import FullyConvPolicy
+from core.common.preprocess import ObsProcesser, FEATURE_KEYS, AgentInputTuple
+from core.common.utils import weighted_random_sample, select_from_each_row, ravel_index_pairs
 
 
 def _get_placeholders(spatial_dim):
